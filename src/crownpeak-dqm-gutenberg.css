@@ -1,0 +1,615 @@
+.dqm-panel {
+  margin: 1em 0;
+  padding: 1em;
+}
+
+#dqm-scan-content-sidebar-btn {
+  display: block;
+  width: 100%;
+}
+
+.dqm-topics-label {
+  display: block;
+  margin-bottom: 0.25em;
+}
+
+.checkpoint-badges{
+  gap: 0!important;
+}
+
+#dqm-topics-loading {
+  display: inline;
+  margin-left: 0.5em;
+}
+
+#dqm-checkpoints-list {
+  margin-top: 1em;
+}
+
+.dqm-checkpoint-group-label {
+  font-weight: bold;
+  margin: 1em 0 0.5em 0;
+}
+
+.dqm-checkpoint-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.25em;
+  padding-bottom: 0.75em;
+  border-bottom: 1px solid #eee;
+}
+
+.dqm-info-icon {
+  cursor: pointer;
+  margin-left: 8px;
+  color: #0073aa;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+}
+
+.dqm-checkpoint-label {
+  flex: 1;
+  cursor: pointer;
+}
+
+.dqm-checkpoint-topics {
+  font-size: 0.9em;
+  color: #888;
+  margin-left: 0.5em;
+}
+
+.dqm-show-issues-btn {
+  margin-left: 0.5em;
+}
+
+#dqm-scan-result-sidebar {
+  margin-top: 1em;
+  display: none;
+}
+
+#dqm-topics-container {
+  display: none;
+}
+
+.dqm-modal {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  border-radius: 8px;
+  padding: 1.5em 2em 1.5em 1.5em;
+  min-width: 340px;
+  max-width: 420px;
+  max-height: 70vh;
+  overflow-y: auto;
+  transition: opacity 0.2s;
+  opacity: 1;
+  display: block;
+}
+
+.dqm-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+}
+
+.dqm-modal-title {
+  font-weight: bold;
+  font-size: 1.15em;
+  margin-bottom: 0.5em;
+}
+
+.dqm-modal-desc {
+  font-size: 1em;
+  color: #333;
+  margin-bottom: 0.75em;
+}
+
+.dqm-modal-topics {
+  font-size: 0.95em;
+  color: #888;
+}
+
+#dqm-error-list {
+  margin-top: 1em;
+}
+
+#dqm-spellcheck-result {
+  margin-top: 1em;
+}
+
+#dqm-highlight-errors-btn {
+  margin-top: 1em;
+}
+
+.dqm-admin-page {
+  max-width: 800px;
+  margin: 0;
+  padding: 0;
+}
+
+.dqm-admin-page .wrap {
+  margin: 20px 0 0 0;
+}
+
+.dqm-admin-page .wrap h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #212529;
+  margin-bottom: 20px;
+  padding: 0;
+  line-height: 1.3;
+}
+
+.dqm-admin-page .card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e1e3e5;
+  margin-bottom: 20px;
+  width: 100%;
+  max-width: max-content;
+  min-width: 245px;
+}
+
+.dqm-admin-page .card h3 {
+  font-size: 18px;
+  margin-bottom: 15px;
+  color: #212529;
+  font-weight: 600;
+}
+
+.dqm-admin-page .form-table {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  margin: 0;
+}
+
+.dqm-admin-page .form-table th,
+.dqm-admin-page .form-table td {
+  padding: 0;
+  border: none;
+  vertical-align: top;
+}
+
+.dqm-admin-page .form-group {
+  margin-bottom: 20px;
+}
+
+.dqm-admin-page .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.dqm-admin-page .form-label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #212529;
+  font-size: 14px;
+}
+
+.dqm-admin-page .form-input {
+  width: 100%;
+  max-width: 400px;
+  padding: 12px;
+  border: 1px solid #c9cccf;
+  border-radius: 4px;
+  font-size: 14px;
+  background: #fff;
+  transition: border-color 0.2s ease;
+}
+
+.dqm-admin-page .form-input:focus {
+  outline: none;
+  border-color: #0073aa;
+  box-shadow: 0 0 0 1px #0073aa;
+}
+
+.dqm-admin-page .form-help {
+  font-size: 12px;
+  color: #6d7175;
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+.dqm-admin-page .submit {
+  margin: 0;
+  padding: 0;
+}
+
+.dqm-admin-page .button-primary {
+  background: #b604d4;
+  border-color: #b604d4;
+  color: white;
+  padding: 12px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.dqm-admin-page .button-primary:hover,
+.dqm-admin-page .button-primary:focus {
+  background: #000000;
+  border-color: #000000;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dqm-admin-page .button-primary:active {
+  transform: translateY(1px);
+}
+
+.dqm-admin-page .notice {
+  border-radius: 4px;
+  margin: 0 0 20px 0;
+}
+
+.dqm-admin-page .notice-success {
+  border-left-color: #46b450;
+  background: #f7fcf7;
+}
+
+.dqm-admin-page .notice-error {
+  border-left-color: #dc3232;
+  background: #fef7f7;
+}
+
+.primary-button {
+  background: #b604d4;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 4px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.primary-button:hover {
+  background: #000000;
+}
+
+.primary-button:disabled,
+.primary-button[disabled] {
+  background: #ccc !important;
+  color: #fff !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+}
+
+.primary-button:disabled:hover,
+.primary-button[disabled]:hover {
+  background: #ccc !important;
+  color: #fff !important;
+}
+
+.score-display {
+  text-align: center;
+  padding: 30px;
+  background: linear-gradient(135deg, #b604d4, #b975c5);
+  color: white;
+  border-radius: 8px;
+}
+
+.score-number {
+  font-size: 48px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.score-label {
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+#dqm-score-card-container .card,
+#dqm-checkpoints-list .card,
+#dqm-topics-container .card {
+  border: none;
+  margin-top: 0;
+  max-width: max-content;
+  padding: 0.7em 0em 1em;
+  box-shadow: none;
+  min-width: 245px;
+}
+
+#dqm-score-card-container .card h3,
+#dqm-checkpoints-list .card h3,
+#dqm-topics-container .card h3 {
+  margin-bottom: 0;
+  font-size: 14px;
+}
+
+#dqm-score-card-container .card h3 {
+  margin-bottom: 18px !important;
+}
+
+.pie-chart {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: conic-gradient(#008060 0deg 252deg, #ff5630 252deg 360deg);
+  margin: 20px auto;
+  position: relative;
+}
+
+.pie-chart::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: #212529;
+}
+
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 15px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-color.passed {
+  background: #b604d4;
+}
+
+.legend-color.failed {
+  background: #303747;
+}
+
+@media (max-width: 768px) {
+  .dqm-admin-page {
+    max-width: 100%;
+    padding: 0 10px;
+  }
+
+  .dqm-admin-page .card {
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+
+  .dqm-admin-page .form-input {
+    max-width: 100%;
+  }
+
+  .dqm-admin-page .wrap h1 {
+    font-size: 20px;
+    margin-bottom: 15px;
+  }
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.badge.accessibility {
+  background: #ff5630;
+}
+.badge.seo {
+  background: #ff8b00;
+}
+.badge.brand {
+  background: #0052cc;
+}
+.badge.regulatory {
+  background: #008060;
+}
+.badge.legal {
+  background: #6d6d6d;
+}
+.badge.usability {
+  background: #36b37e;
+}
+
+.checkpoint-title-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkpoint-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.checkpoint-item {
+  padding-bottom: 2px;
+}
+
+.checkpoint-icon.failed {
+  background: #ff5630;
+}
+
+.components-panel__body .components-panel__arrow {
+  transition: transform 0.2s;
+  display: inline-block;
+}
+
+.components-panel__body:not(.is-opened) .components-panel__arrow {
+  transform: translateY(-50%) rotate(-180deg);
+  position: absolute;
+  right: 16px;
+  top: 50%;
+}
+
+.checkpoint-title {
+  font-weight: 600;
+  font-size: 1em;
+  color: #212529;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.components-panel__body.is-opened {
+  padding: 0 !important;
+}
+
+.components-panel__body-title .components-panel__body-toggle {
+  font-size: 14px;
+}
+
+.components-panel__body {
+  border-bottom: none;
+  border-top: none;
+}
+
+#dqm-cms-tab.components-tab-panel__tabs-item {
+  position: relative;
+  background: none;
+  border: none;
+  outline: none;
+}
+#dqm-cms-tab.components-tab-panel__tabs-item:after {
+  background: var(
+    --wp-components-color-accent,
+    var(--wp-admin-theme-color, #3858e9)
+  );
+  border-radius: 0;
+  bottom: 0;
+  content: "";
+  height: 0;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  transition: all 0.1s linear;
+}
+#dqm-cms-tab.components-tab-panel__tabs-item.is-active:after {
+  height: 2px;
+  outline: 2px solid #0000;
+  outline-offset: -1px;
+}
+
+.checkpoint-badges .badge {
+  font-size: 8px !important;
+  padding: 2px 6px;
+}
+
+.checkpoint-list > .checkpoint-item {
+  margin-bottom: 1em;
+  padding-bottom: 1em;
+  border-bottom: 1.5px solid #ccc;
+  background: #fafbfc;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.checkpoint-list > .checkpoint-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.checkpoint-icon-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.25em;
+}
+
+.checkpoint-icon-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.checkpoint-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.checkpoint-title {
+  font-weight: 600;
+  font-size: 1em;
+  color: #212529;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.checkpoint-badges {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+#dqm-score-card-container .dqm-breakdown-divider {
+  border: none;
+  border-bottom: 1.5px solid #e1e3e5;
+  margin: 10px 0 10px 0!important;
+  width: 100%;
+}
+
+.checkpoint-list > .checkpoint-item {
+ background: none;
+}
+
+.dqm-spinner {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border: 4px solid #e1e3e5;
+  border-top: 4px solid #b604d4;
+  border-radius: 50%;
+  animation: dqm-spin 1s linear infinite;
+  margin: 20px auto;
+}
+@keyframes dqm-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
