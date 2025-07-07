@@ -2,7 +2,7 @@
     const __ = window.wp && wp.i18n && wp.i18n.__ ? wp.i18n.__ : function (s) { return s; };
     const TABLIST_SELECTOR = 'div[role="tablist"][aria-orientation="horizontal"]';
     const BUTTON_ID = 'dqm-cms-tab';
-    const BUTTON_LABEL = __('Crownpeak DQM', 'crownpeak-dqm-insights');
+    const BUTTON_LABEL = __('Crownpeak DQM', 'dqm-wordpress-plugin');
     const PANEL_ID = 'dqm-cms-panel';
 
     function showDqmPanel(show) {
@@ -18,7 +18,7 @@
             panel.appendChild(scoreCardContainer);
             const scanBtn = document.createElement('button');
             scanBtn.id = 'dqm-scan-content-sidebar-btn';
-            scanBtn.textContent = __('Run Quality Check', 'crownpeak-dqm-insights');
+            scanBtn.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
             scanBtn.style.display = 'block';
             scanBtn.style.width = '100%';
             scanBtn.className = 'primary-button';
@@ -26,13 +26,13 @@
             const failedCheckpointsCard = document.createElement('div');
             failedCheckpointsCard.className = 'card';
             const failedHeader = document.createElement('h3');
-            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + __('Failed Checkpoints', 'crownpeak-dqm-insights');
+            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + __('Failed Checkpoints', 'dqm-wordpress-plugin');
             failedCheckpointsCard.appendChild(failedHeader);
 
             const topicsDiv = document.createElement('div');
             topicsDiv.style.marginTop = '1em';
             const topicsLabel = document.createElement('label');
-            topicsLabel.textContent = __('All Topics:', 'crownpeak-dqm-insights');
+            topicsLabel.textContent = __('All Topics:', 'dqm-wordpress-plugin');
             topicsLabel.setAttribute('for', 'dqm-topics-dropdown');
             topicsLabel.style.display = 'block';
             topicsLabel.style.marginBottom = '0.25em';
@@ -42,11 +42,11 @@
             topicsDropdown.style.width = '100%';
             const defaultOption = document.createElement('option');
             defaultOption.value = 'all';
-            defaultOption.textContent = __('All Topics', 'crownpeak-dqm-insights');
+            defaultOption.textContent = __('All Topics', 'dqm-wordpress-plugin');
             topicsDropdown.appendChild(defaultOption);
             const topicsLoading = document.createElement('span');
             topicsLoading.id = 'dqm-topics-loading';
-            topicsLoading.textContent = __('Loading...', 'crownpeak-dqm-insights');
+            topicsLoading.textContent = __('Loading...', 'dqm-wordpress-plugin');
             topicsLoading.style.display = 'inline';
             topicsLoading.style.marginLeft = '0.5em';
             topicsLoading.className = '';
@@ -175,18 +175,18 @@
                     } else {
                         var opt = document.createElement('option');
                         opt.value = '';
-                        opt.textContent = __('No topics found', 'crownpeak-dqm-insights');
+                        opt.textContent = __('No topics found', 'dqm-wordpress-plugin');
                         topicsDropdown.appendChild(opt);
-                        checkpointsList.innerHTML = '<em>' + __('No checkpoints found.', 'crownpeak-dqm-insights') + '</em>';
+                        checkpointsList.innerHTML = '<em>' + __('No checkpoints found.', 'dqm-wordpress-plugin') + '</em>';
                     }
                 })
                 .catch(() => {
                     topicsLoading.style.display = 'none';
                     var opt = document.createElement('option');
                     opt.value = '';
-                    opt.textContent = __('Error loading topics', 'crownpeak-dqm-insights');
+                    opt.textContent = __('Error loading topics', 'dqm-wordpress-plugin');
                     topicsDropdown.appendChild(opt);
-                    checkpointsList.innerHTML = '<em>' + __('Error loading checkpoints.', 'crownpeak-dqm-insights') + '</em>';
+                    checkpointsList.innerHTML = '<em>' + __('Error loading checkpoints.', 'dqm-wordpress-plugin') + '</em>';
                 });
 
             topicsDropdown.addEventListener('change', function () {
@@ -240,7 +240,7 @@
                         'Usability': '#36b37e',
                     };
                     html += `<div class="card">
-                        <h3>📈 ${__('Quality Breakdown', 'crownpeak-dqm-insights')}</h3>`;
+                        <h3>📈 ${__('Quality Breakdown', 'dqm-wordpress-plugin')}</h3>`;
                     Array.from(allTopics).sort().forEach((topicRaw, idx, arr) => {
                         const topic = (topicRaw || '').trim();
                         const checkpoints = allCheckpoints.filter(cp => Array.isArray(cp.topics) && cp.topics.map(t => (t || '').trim()).includes(topic));
@@ -256,7 +256,7 @@
                             <div style="margin-bottom: 10px;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                                     <span class="${badgeClass}" style="background:${color}">${topic}</span>
-                                    <span>${passed}/${total} ${__('passed', 'crownpeak-dqm-insights')}</span>
+                                    <span>${passed}/${total} ${__('passed', 'dqm-wordpress-plugin')}</span>
                                 </div>
                                 <div style="background: #e1e3e5; height: 8px; border-radius: 4px;">
                                     <div style="background: ${color}; width: ${percent}%; height: 100%; border-radius: 4px;"></div>
@@ -297,7 +297,7 @@
             async function fetchAndRenderErrors(assetId) {
                 const apiKey = CrownpeakDQM.apiKey;
                 const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${assetId}/status?apiKey=${apiKey}&visibility=public`;
-                resultDiv.innerHTML = __('Loading errors...', 'crownpeak-dqm-insights');
+                resultDiv.innerHTML = __('Loading errors...', 'dqm-wordpress-plugin');
                 try {
                     const resp = await fetch(url, {
                         headers: {
@@ -314,7 +314,7 @@
                         const total = data.checkpoints.length;
                         const passed = data.checkpoints.filter(cp => !cp.failed).length;
                         renderScoreCard(passed, total);
-                        let html = '<h3>' + __('Detailed Errors', 'crownpeak-dqm-insights') + '</h3>';
+                        let html = '<h3>' + __('Detailed Errors', 'dqm-wordpress-plugin') + '</h3>';
                         let hasErrors = false;
                         data.checkpoints.forEach(cp => {
                             if (cp.failed && cp.issues && cp.issues.length > 0) {
@@ -326,14 +326,14 @@
                                 html += '</ul></div>';
                             }
                         });
-                        if (!hasErrors) html += '<div>' + __('No errors found!', 'crownpeak-dqm-insights') + '</div>';
+                        if (!hasErrors) html += '<div>' + __('No errors found!', 'dqm-wordpress-plugin') + '</div>';
                         resultDiv.innerHTML = html;
                     } else {
-                        resultDiv.innerHTML = __('No error data found.', 'crownpeak-dqm-insights');
+                        resultDiv.innerHTML = __('No error data found.', 'dqm-wordpress-plugin');
                         scoreCardContainer.innerHTML = '';
                     }
                 } catch (e) {
-                    resultDiv.innerHTML = __('Failed to load errors: ', 'crownpeak-dqm-insights') + e.message;
+                    resultDiv.innerHTML = __('Failed to load errors: ', 'dqm-wordpress-plugin') + e.message;
                     scoreCardContainer.innerHTML = '';
                 }
             }
@@ -348,16 +348,16 @@
                     });
                     const data = await resp.json();
                     if (data.success && data.data) {
-                        let html = '<h3>' + __('Spellcheck Results', 'crownpeak-dqm-insights') + '</h3>';
+                        let html = '<h3>' + __('Spellcheck Results', 'dqm-wordpress-plugin') + '</h3>';
                         const misspellings = data.data?.misspellings || data.misspellings;
                         if (Array.isArray(misspellings) && misspellings.length > 0) {
                             html += '<ul>';
                             misspellings.forEach(issue => {
-                                html += `<li><strong>${issue.word}</strong> (${issue.occurrences} ` + __('occurrence', 'crownpeak-dqm-insights') + `${issue.occurrences > 1 ? __('s', 'crownpeak-dqm-insights') : ''})</li>`;
+                                html += `<li><strong>${issue.word}</strong> (${issue.occurrences} ` + __('occurrence', 'dqm-wordpress-plugin') + `${issue.occurrences > 1 ? __('s', 'dqm-wordpress-plugin') : ''})</li>`;
                             });
                             html += '</ul>';
                         } else {
-                            html += '<div>' + __('No spelling issues found!', 'crownpeak-dqm-insights') + '</div>';
+                            html += '<div>' + __('No spelling issues found!', 'dqm-wordpress-plugin') + '</div>';
                         }
                     } else {
                     }
@@ -368,7 +368,7 @@
             topicsContainer.appendChild(failedCheckpointsCard);
             const scanBtnAfterFailed = document.createElement('button');
             scanBtnAfterFailed.id = 'dqm-scan-content-after-failed-btn';
-            scanBtnAfterFailed.textContent = __('Run Quality Check', 'crownpeak-dqm-insights');
+            scanBtnAfterFailed.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
             scanBtnAfterFailed.style.display = 'block';
             scanBtnAfterFailed.style.width = '100%';
             scanBtnAfterFailed.className = 'primary-button';
@@ -410,7 +410,7 @@
                 if (!content) {
                     spinner.style.display = 'none';
                     resultDiv.style.display = 'block';
-                    resultDiv.textContent = __('Could not extract post content.', 'crownpeak-dqm-insights');
+                    resultDiv.textContent = __('Could not extract post content.', 'dqm-wordpress-plugin');
                     button.disabled = false;
                     return;
                 }
@@ -447,12 +447,12 @@
                     } else {
                         spinner.style.display = 'none';
                         resultDiv.style.display = 'block';
-                        resultDiv.textContent = __('Scan failed: ', 'crownpeak-dqm-insights') + (data.message || __('Unknown error', 'crownpeak-dqm-insights'));
+                        resultDiv.textContent = __('Scan failed: ', 'dqm-wordpress-plugin') + (data.message || __('Unknown error', 'dqm-wordpress-plugin'));
                     }
                 } catch (e) {
                     spinner.style.display = 'none';
                     resultDiv.style.display = 'block';
-                    resultDiv.textContent = __('Scan failed: ', 'crownpeak-dqm-insights') + (e.message || __('Unknown error', 'crownpeak-dqm-insights'));
+                    resultDiv.textContent = __('Scan failed: ', 'dqm-wordpress-plugin') + (e.message || __('Unknown error', 'dqm-wordpress-plugin'));
                 } finally {
                     button.disabled = false;
                 }
@@ -589,7 +589,7 @@
         closeBtn.style.border = 'none';
         closeBtn.style.fontSize = '1.5em';
         closeBtn.style.cursor = 'pointer';
-        closeBtn.setAttribute('aria-label', __('Close', 'crownpeak-dqm-insights'));
+        closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
         closeBtn.onclick = () => { checkpointDialog.style.display = 'none'; };
         checkpointDialog.appendChild(closeBtn);
         const name = document.createElement('div');
@@ -612,7 +612,7 @@
             const topics = document.createElement('div');
             topics.style.fontSize = '0.95em';
             topics.style.color = '#888';
-            topics.textContent = __('Topics: ', 'crownpeak-dqm-insights') + cp.topics.join(', ');
+            topics.textContent = __('Topics: ', 'dqm-wordpress-plugin') + cp.topics.join(', ');
             topics.className = 'dqm-modal-topics';
             checkpointDialog.appendChild(topics);
         }
@@ -661,18 +661,18 @@
         closeBtn.style.border = 'none';
         closeBtn.style.fontSize = '1.5em';
         closeBtn.style.cursor = 'pointer';
-        closeBtn.setAttribute('aria-label', __('Close', 'crownpeak-dqm-insights'));
+        closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
         closeBtn.onclick = () => { checkpointIssuesDialog.style.display = 'none'; };
         checkpointIssuesDialog.appendChild(closeBtn);
         const name = document.createElement('div');
         name.style.fontWeight = 'bold';
         name.style.fontSize = '1.15em';
         name.style.marginBottom = '0.5em';
-        name.textContent = checkpointName + ' - ' + __('Issues', 'crownpeak-dqm-insights');
+        name.textContent = checkpointName + ' - ' + __('Issues', 'dqm-wordpress-plugin');
         name.className = 'dqm-modal-title';
         checkpointIssuesDialog.appendChild(name);
         const contentDiv = document.createElement('div');
-        contentDiv.textContent = __('Loading issues...', 'crownpeak-dqm-insights');
+        contentDiv.textContent = __('Loading issues...', 'dqm-wordpress-plugin');
         checkpointIssuesDialog.appendChild(contentDiv);
         const apiKey = CrownpeakDQM.apiKey;
         const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${assetId}/errors/${checkpointId}?apiKey=${apiKey}`;
@@ -694,12 +694,12 @@
                     });
                     html += '</ul>';
                 } else {
-                    html += '<div>' + __('No issues found for this checkpoint.', 'crownpeak-dqm-insights') + '</div>';
+                    html += '<div>' + __('No issues found for this checkpoint.', 'dqm-wordpress-plugin') + '</div>';
                 }
                 contentDiv.innerHTML = html;
             })
             .catch(e => {
-                contentDiv.innerHTML = '<div>' + __('Failed to load issues: ', 'crownpeak-dqm-insights') + e.message + '</div>';
+                contentDiv.innerHTML = '<div>' + __('Failed to load issues: ', 'dqm-wordpress-plugin') + e.message + '</div>';
             });
         checkpointIssuesDialog.style.display = 'block';
         checkpointIssuesDialog.style.opacity = '1';

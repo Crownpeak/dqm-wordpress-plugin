@@ -6,11 +6,10 @@
  * Description: A WordPress Plugin for Crownpeak Digital Quality & Accessibility Management.
  * Version: 1.0.0
  * Author: Crownpeak
- * Author URI: https://example.com
- * License: GPL v2 or later
- * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: crownpeak-dqm-insights
- * Domain Path: /languages
+ * Author URI: https://www.crownpeak.com
+ * License: MIT
+ * License URI: https://github.com/Crownpeak/dqm-wordpress-plugin/blob/main/LICENSE
+ * Text Domain: dqm-wordpress-plugin
  */
 
 if (!defined('ABSPATH')) {
@@ -22,10 +21,7 @@ define('CROWNPEAK_DQM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CROWNPEAK_DQM_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('CROWNPEAK_DQM_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
-/**
- * Main Crownpeak DQM Class
- */
-class CrownpeakDQMInsights
+class DQMWordPressPlugin
 {
 
     public function __construct()
@@ -33,7 +29,7 @@ class CrownpeakDQMInsights
         add_action('init', array($this, 'init'));
         register_activation_hook(__FILE__, array($this, 'activate'));
         register_deactivation_hook(__FILE__, array($this, 'deactivate'));
-        register_uninstall_hook(__FILE__, array('CrownpeakDQMInsights', 'uninstall'));
+        register_uninstall_hook(__FILE__, array('DQMWordPressPlugin', 'uninstall'));
         add_action('wp_ajax_crownpeak_dqm_scan', 'crownpeak_dqm_scan_handler');
         add_action('wp_ajax_nopriv_crownpeak_dqm_scan', 'crownpeak_dqm_scan_handler');
         add_action('wp_ajax_crownpeak_dqm_get_checkpoints', 'crownpeak_dqm_get_checkpoints_handler');
@@ -43,7 +39,7 @@ class CrownpeakDQMInsights
 
     public function init()
     {
-        load_plugin_textdomain('crownpeak-dqm-insights', false, dirname(CROWNPEAK_DQM_PLUGIN_BASENAME) . '/languages');
+        load_plugin_textdomain('dqm-wordpress-plugin', false, dirname(CROWNPEAK_DQM_PLUGIN_BASENAME) . '/languages');
 
         if (is_admin()) {
             add_action('admin_menu', array($this, 'add_admin_menu'));
@@ -65,23 +61,17 @@ class CrownpeakDQMInsights
 
     public static function uninstall() {}
 
-    /**
-     * Add admin menu
-     */
-    public function add_admin_menu()
+      public function add_admin_menu()
     {
         add_options_page(
-            __('Crownpeak Digital Quality & Accessibility Management', 'crownpeak-dqm-insights'),
-            __('Crownpeak Digital Quality & Accessibility Managemet', 'crownpeak-dqm-insights'),
+            __('Crownpeak Digital Quality & Accessibility Management', 'dqm-wordpress-plugin'),
+            __('Crownpeak Digital Quality & Accessibility Management', 'dqm-wordpress-plugin'),
             'manage_options',
-            'crownpeak-dqm-insights',
+            'dqm-wordpress-plugin',
             array($this, 'admin_page')
         );
     }
 
-    /**
-     * Admin initialization
-     */
     public function admin_init()
     {
         register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_api_key');
@@ -96,18 +86,18 @@ class CrownpeakDQMInsights
                 <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
 
                 <p class="plugin-description" style="font-size:16px;max-width:700px;margin-bottom:24px;color:#444;">
-                    <?php _e('A WordPress Plugin for Crownpeak Digital Quality & Accessibility Management.', 'crownpeak-dqm-insights'); ?>
+                    <?php _e('A WordPress Plugin for Crownpeak Digital Quality & Accessibility Management.', 'dqm-wordpress-plugin'); ?>
                 </p>
 
                 <div class="card">
-                    <h3><?php _e('Configuration', 'crownpeak-dqm-insights'); ?></h3>
+                    <h3><?php _e('Configuration', 'dqm-wordpress-plugin'); ?></h3>
 
                     <form method="post" action="options.php">
                         <?php settings_fields('crownpeak_dqm_settings'); ?>
 
                         <div class="form-group">
                             <label class="form-label" for="crownpeak_dqm_api_key">
-                                <?php _e('DQM CMS API Key', 'crownpeak-dqm-insights'); ?>
+                                <?php _e('DQM CMS API Key', 'dqm-wordpress-plugin'); ?>
                             </label>
                             <input
                                 type="text"
@@ -115,7 +105,7 @@ class CrownpeakDQMInsights
                                 name="crownpeak_dqm_api_key"
                                 value="<?php echo esc_attr(get_option('crownpeak_dqm_api_key', '')); ?>"
                                 class="form-input"
-                                placeholder="<?php _e('Enter your DQM API key', 'crownpeak-dqm-insights'); ?>" />
+                                placeholder="<?php _e('Enter your DQM API key', 'dqm-wordpress-plugin'); ?>" />
                             <div class="form-help">
                                 <?php _e('Your Crownpeak DQM CMS API Key. Contact support@crownpeak.com if you do not have this.'); ?>
                             </div>
@@ -123,7 +113,7 @@ class CrownpeakDQMInsights
 
                         <div class="form-group">
                             <label class="form-label" for="crownpeak_dqm_website_id">
-                                <?php _e('Website ID', 'crownpeak-dqm-insights'); ?>
+                                <?php _e('Website ID', 'dqm-wordpress-plugin'); ?>
                             </label>
                             <input
                                 type="text"
@@ -131,14 +121,14 @@ class CrownpeakDQMInsights
                                 name="crownpeak_dqm_website_id"
                                 value="<?php echo esc_attr(get_option('crownpeak_dqm_website_id', '')); ?>"
                                 class="form-input"
-                                placeholder="<?php _e('Enter your Website ID', 'crownpeak-dqm-insights'); ?>" />
+                                placeholder="<?php _e('Enter your Website ID', 'dqm-wordpress-plugin'); ?>" />
                             <div class="form-help">
-                                <?php _e('Your DQM Website ID. If you are unsure what this is, please contact support@crownpeak.com.', 'crownpeak-dqm-insights'); ?>
+                                <?php _e('Your DQM Website ID. If you are unsure what this is, please contact support@crownpeak.com.', 'dqm-wordpress-plugin'); ?>
                             </div>
                         </div>
 
                         <div class="submit">
-                            <?php submit_button(__('Save Configuration', 'crownpeak-dqm-insights'), 'primary', 'submit', false); ?>
+                            <?php submit_button(__('Save Configuration', 'dqm-wordpress-plugin'), 'primary', 'submit', false); ?>
                         </div>
                     </form>
                 </div>
@@ -150,14 +140,14 @@ class CrownpeakDQMInsights
     public function enqueue_gutenberg_assets()
     {
         wp_enqueue_script(
-            'crownpeak-dqm-gutenberg',
-            CROWNPEAK_DQM_PLUGIN_URL . 'src/crownpeak-dqm-gutenberg.js',
+            'dqm-wordpress-plugin-gutenberg',
+            CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-gutenberg.js',
             array('wp-element', 'wp-edit-post', 'wp-plugins', 'wp-components', 'wp-data', 'wp-i18n'),
             CROWNPEAK_DQM_VERSION,
             true
         );
-        wp_set_script_translations('crownpeak-dqm-gutenberg', 'crownpeak-dqm-insights', CROWNPEAK_DQM_PLUGIN_PATH . 'languages');
-        wp_localize_script('crownpeak-dqm-gutenberg', 'CrownpeakDQM', array(
+        wp_set_script_translations('dqm-wordpress-plugin-gutenberg', 'dqm-wordpress-plugin', CROWNPEAK_DQM_PLUGIN_PATH . 'languages');
+        wp_localize_script('dqm-wordpress-plugin-gutenberg', 'CrownpeakDQM', array(
             'ajaxurl' => admin_url('admin-ajax.php'),
             'apiKey' => get_option('crownpeak_dqm_api_key', ''),
             'websiteId' => get_option('crownpeak_dqm_website_id', ''),
@@ -169,8 +159,8 @@ class CrownpeakDQMInsights
             '6.5.0'
         );
         wp_enqueue_style(
-            'crownpeak-dqm-gutenberg-css',
-            CROWNPEAK_DQM_PLUGIN_URL . 'src/crownpeak-dqm-gutenberg.css',
+            'dqm-wordpress-plugin-gutenberg-css',
+            CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-gutenberg.css',
             array(),
             CROWNPEAK_DQM_VERSION
         );
@@ -178,23 +168,23 @@ class CrownpeakDQMInsights
 
     public function enqueue_admin_assets($hook)
     {
-        if ($hook !== 'settings_page_crownpeak-dqm-insights') {
+        if ($hook !== 'settings_page_dqm-wordpress-plugin') {
             return;
         }
         wp_enqueue_style(
             'crownpeak-dqm-admin-css',
-            CROWNPEAK_DQM_PLUGIN_URL . 'src/crownpeak-dqm-gutenberg.css',
+            CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-gutenberg.css',
             array(),
             CROWNPEAK_DQM_VERSION
         );
     }
 }
 
-new CrownpeakDQMInsights();
+new DQMWordPressPlugin();
 
 function crownpeak_dqm_insights()
 {
-    return CrownpeakDQMInsights::class;
+    return DQMWordPressPlugin::class;
 }
 
 function crownpeak_dqm_scan_handler()
