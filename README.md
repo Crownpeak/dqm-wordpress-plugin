@@ -1,7 +1,7 @@
 <a href="http://www.crownpeak.com" target="_blank">![Crownpeak Logo](./images/logo/crownpeak-logo.png "Crownpeak Logo")</a>
 
 # Crownpeak DQM WordPress Plugin
-This plugin integrates [Crownpeak DQM](https://www.crownpeak.com/products/digital-quality-management) into the WordPress Gutenberg editor, providing real-time insights into content quality, accessibility, SEO, and compliance as you build pages.
+This plugin integrates [Crownpeak DQM](https://www.crownpeak.com/firstspirit/products/digital-accessibility/digital-accessibility-and-quality-management-dqm/) into the WordPress Gutenberg editor, providing real-time insights into content quality, accessibility, SEO, and compliance as you build pages.
 
 ---
 
