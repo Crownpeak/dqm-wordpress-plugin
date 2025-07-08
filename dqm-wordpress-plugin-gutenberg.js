@@ -401,21 +401,55 @@
                 resultDiv.style.display = 'none';
                 topicsLoading.style.display = 'none';
                 spinner.style.display = 'block';
-                let content = '';
+                let postId = null;
+                let previewUrl = null;
+                
                 if (window.wp && wp.data) {
                     try {
-                        content = wp.data.select('core/editor').getEditedPostContent();
-                    } catch (e) { }
+                        postId = wp.data.select('core/editor').getCurrentPostId();
+                        previewUrl = wp.data.select('core/editor').getPermalink();
+                        if (!previewUrl && postId) {
+                            previewUrl = `${window.location.origin}/?p=${postId}&preview=true`;
+                        }
+                    } catch (e) {
+                        console.warn('Error getting post info:', e);
+                    }
                 }
-                if (!content) {
+                
+                if (!previewUrl) {
                     spinner.style.display = 'none';
                     resultDiv.style.display = 'block';
-                    resultDiv.textContent = __('Could not extract post content.', 'dqm-wordpress-plugin');
+                    resultDiv.textContent = __('Could not determine preview URL for this post.', 'dqm-wordpress-plugin');
                     button.disabled = false;
                     return;
                 }
-                const postTitle = (window.wp && wp.data) ? wp.data.select('core/editor').getEditedPostAttribute('title') : 'WordPress Page';
-                const html = `<html><head><title>${postTitle}</title></head><body>${content}</body></html>`;
+                
+                let html = '';
+                try {
+                    const previewResponse = await fetch(previewUrl, {
+                        credentials: 'same-origin',
+                        headers: {
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+                    
+                    if (!previewResponse.ok) {
+                        throw new Error(`Preview fetch failed: ${previewResponse.status} ${previewResponse.statusText}`);
+                    }
+                    
+                    html = await previewResponse.text();
+                    
+                    if (!html.trim()) {
+                        throw new Error('Preview content is empty');
+                    }
+                } catch (previewError) {
+                    console.warn('Failed to fetch preview content:', previewError);
+                    spinner.style.display = 'none';
+                    resultDiv.style.display = 'block';
+                    resultDiv.textContent = __('Could not fetch preview content: ', 'dqm-wordpress-plugin') + previewError.message;
+                    button.disabled = false;
+                    return;
+                }
                 const params = new URLSearchParams({
                     action: 'crownpeak_dqm_scan',
                     content: html
