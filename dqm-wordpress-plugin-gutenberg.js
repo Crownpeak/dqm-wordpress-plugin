@@ -22,13 +22,6 @@
             scanBtn.style.display = 'block';
             scanBtn.style.width = '100%';
             scanBtn.className = 'primary-button';
-
-            const failedCheckpointsCard = document.createElement('div');
-            failedCheckpointsCard.className = 'card';
-            const failedHeader = document.createElement('h3');
-            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + __('Failed Checkpoints', 'dqm-wordpress-plugin');
-            failedCheckpointsCard.appendChild(failedHeader);
-
             const topicsDiv = document.createElement('div');
             topicsDiv.style.marginTop = '1em';
             const topicsLabel = document.createElement('label');
@@ -53,11 +46,16 @@
             topicsDiv.appendChild(topicsLabel);
             topicsDiv.appendChild(topicsDropdown);
             topicsDiv.appendChild(topicsLoading);
+            const failedCheckpointsCard = document.createElement('div');
+            failedCheckpointsCard.className = 'card';
+            const failedHeader = document.createElement('h3');
+            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + __('Failed Checkpoints', 'dqm-wordpress-plugin');
+            failedCheckpointsCard.appendChild(failedHeader);
+            
             const checkpointsList = document.createElement('div');
             checkpointsList.id = 'dqm-checkpoints-list';
             checkpointsList.className = '';
-            topicsDiv.appendChild(checkpointsList);
-            failedCheckpointsCard.appendChild(topicsDiv);
+            failedCheckpointsCard.appendChild(checkpointsList);
 
             let allCheckpoints = [];
             let allTopics = new Set();
@@ -71,23 +69,25 @@
                     : allCheckpoints.filter(cp => Array.isArray(cp.topics) && cp.topics.includes(selectedTopic));
 
                 let failed = filtered.filter(cp => checkpointStatusMap[cp.id]);
-                if (failed.length === 0) {
-                    
-                    if (failedCheckpointsCard.parentNode) {
-                        failedCheckpointsCard.style.display = 'none';
-                    }
-                } else {
-                    failedCheckpointsCard.style.display = '';
-                }
+                failedCheckpointsCard.style.display = '';
 
                 const card = document.createElement('div');
                 card.className = 'card';
                 const failedCount = failed.length;
-                const ul = document.createElement('ul');
-                ul.className = 'checkpoint-list';
 
                 if (failedCount === 0) {
+                    const noFailuresMsg = document.createElement('div');
+                    noFailuresMsg.style.padding = '10px';
+                    noFailuresMsg.style.textAlign = 'center';
+                    noFailuresMsg.style.color = '#666';
+                    noFailuresMsg.textContent = selectedTopic === 'all' 
+                        ? __('No failed checkpoints found!', 'dqm-wordpress-plugin')
+                        : __('No failed checkpoints found for this topic.', 'dqm-wordpress-plugin');
+                    card.appendChild(noFailuresMsg);
                 } else {
+                    const ul = document.createElement('ul');
+                    ul.className = 'checkpoint-list';
+                    
                     failed.forEach(cp => {
                         const li = document.createElement('li');
                         li.className = 'checkpoint-item';
@@ -207,6 +207,7 @@
             topicsContainer.id = 'dqm-topics-container';
             topicsContainer.style.display = 'none';
             topicsContainer.className = '';
+            topicsContainer.appendChild(topicsDiv);
             topicsContainer.appendChild(failedCheckpointsCard);
             function renderScoreCard(passedCount, totalCount) {
                 const percent = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
@@ -365,7 +366,6 @@
                 }
             }
 
-            topicsContainer.appendChild(failedCheckpointsCard);
             const scanBtnAfterFailed = document.createElement('button');
             scanBtnAfterFailed.id = 'dqm-scan-content-after-failed-btn';
             scanBtnAfterFailed.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
@@ -520,6 +520,24 @@
         }
     }
 
+    function updateTabIndicatorPosition(activeTab, tablist) {
+        if (!activeTab || !tablist) return;
+        const rect = activeTab.getBoundingClientRect();
+        const tablistRect = tablist.getBoundingClientRect();
+        const left = rect.left - tablistRect.left;
+        const top = rect.top - tablistRect.top;
+        const width = rect.width;
+        const height = rect.height;
+        const right = left + width;
+        const bottom = top + height;
+        tablist.style.setProperty('--selected-left', Math.round(left));
+        tablist.style.setProperty('--selected-top', Math.round(top));
+        tablist.style.setProperty('--selected-right', Math.round(right));
+        tablist.style.setProperty('--selected-bottom', Math.round(bottom));
+        tablist.style.setProperty('--selected-width', Math.round(width));
+        tablist.style.setProperty('--selected-height', Math.round(height));
+    }
+
     function injectButton() {
         const tablist = document.querySelector(TABLIST_SELECTOR);
         if (!tablist || document.getElementById(BUTTON_ID)) return;
@@ -539,9 +557,11 @@
             tablist.querySelectorAll('button[role="tab"]').forEach(btn => {
                 btn.setAttribute('aria-selected', 'false');
                 btn.classList.remove('is-active');
+                btn.removeAttribute('data-active-item');
             });
             dqmButton.setAttribute('aria-selected', 'true');
             dqmButton.classList.add('is-active');
+            updateTabIndicatorPosition(dqmButton, tablist);      
             document.querySelectorAll('.editor-sidebar > div.components-panel').forEach(panel => {
                 panel.classList.remove('is-opened', 'is-active');
                 if (panel.id !== PANEL_ID) {
