@@ -420,6 +420,7 @@
                     spinner.style.display = 'none';
                     resultDiv.style.display = 'block';
                     resultDiv.textContent = __('Could not determine preview URL for this post.', 'dqm-wordpress-plugin');
+                    resultDiv.setAttribute('role', 'alert');
                     button.disabled = false;
                     return;
                 }
@@ -447,6 +448,7 @@
                     spinner.style.display = 'none';
                     resultDiv.style.display = 'block';
                     resultDiv.textContent = __('Could not fetch preview content: ', 'dqm-wordpress-plugin') + previewError.message;
+                    resultDiv.setAttribute('role', 'alert');
                     button.disabled = false;
                     return;
                 }
@@ -482,11 +484,13 @@
                         spinner.style.display = 'none';
                         resultDiv.style.display = 'block';
                         resultDiv.textContent = __('Scan failed: ', 'dqm-wordpress-plugin') + (data.message || __('Unknown error', 'dqm-wordpress-plugin'));
+                        resultDiv.setAttribute('role', 'alert');
                     }
                 } catch (e) {
                     spinner.style.display = 'none';
                     resultDiv.style.display = 'block';
                     resultDiv.textContent = __('Scan failed: ', 'dqm-wordpress-plugin') + (e.message || __('Unknown error', 'dqm-wordpress-plugin'));
+                    resultDiv.setAttribute('role', 'alert');
                 } finally {
                     button.disabled = false;
                 }
@@ -616,6 +620,9 @@
         if (!checkpointDialog) {
             checkpointDialog = document.createElement('div');
             checkpointDialog.id = 'dqm-checkpoint-dialog';
+            checkpointDialog.setAttribute('role', 'dialog');
+            checkpointDialog.setAttribute('aria-modal', 'true');
+            checkpointDialog.setAttribute('tabindex', '-1');
             checkpointDialog.style.position = 'fixed';
             checkpointDialog.style.top = '80px';
             checkpointDialog.style.right = '140px';
@@ -644,7 +651,12 @@
         closeBtn.style.fontSize = '1.5em';
         closeBtn.style.cursor = 'pointer';
         closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
-        closeBtn.onclick = () => { checkpointDialog.style.display = 'none'; };
+        closeBtn.onclick = () => {
+            checkpointDialog.style.display = 'none';
+            if (checkpointDialog._lastActiveElement) {
+                checkpointDialog._lastActiveElement.focus();
+            }
+        };
         checkpointDialog.appendChild(closeBtn);
         const name = document.createElement('div');
         name.style.fontWeight = 'bold';
@@ -672,6 +684,17 @@
         }
         checkpointDialog.style.display = 'block';
         checkpointDialog.style.opacity = '1';
+        checkpointDialog._lastActiveElement = document.activeElement;
+        closeBtn.focus();
+        checkpointDialog.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                closeBtn.focus();
+            }
+            if (e.key === 'Escape') {
+                closeBtn.click();
+            }
+        });
     }
     document.addEventListener('mousedown', function (e) {
         if (checkpointDialog && checkpointDialog.style.display !== 'none') {
@@ -688,6 +711,9 @@
         if (!checkpointIssuesDialog) {
             checkpointIssuesDialog = document.createElement('div');
             checkpointIssuesDialog.id = 'dqm-checkpoint-issues-dialog';
+            checkpointIssuesDialog.setAttribute('role', 'dialog');
+            checkpointIssuesDialog.setAttribute('aria-modal', 'true');
+            checkpointIssuesDialog.setAttribute('tabindex', '-1');
             checkpointIssuesDialog.style.position = 'fixed';
             checkpointIssuesDialog.style.top = '100px';
             checkpointIssuesDialog.style.right = '140px';
@@ -716,7 +742,12 @@
         closeBtn.style.fontSize = '1.5em';
         closeBtn.style.cursor = 'pointer';
         closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
-        closeBtn.onclick = () => { checkpointIssuesDialog.style.display = 'none'; };
+        closeBtn.onclick = () => {
+            checkpointIssuesDialog.style.display = 'none';
+            if (checkpointIssuesDialog._lastActiveElement) {
+                checkpointIssuesDialog._lastActiveElement.focus();
+            }
+        };
         checkpointIssuesDialog.appendChild(closeBtn);
         const name = document.createElement('div');
         name.style.fontWeight = 'bold';
@@ -757,5 +788,16 @@
             });
         checkpointIssuesDialog.style.display = 'block';
         checkpointIssuesDialog.style.opacity = '1';
+        checkpointIssuesDialog._lastActiveElement = document.activeElement;
+        closeBtn.focus();
+        checkpointIssuesDialog.addEventListener('keydown', function(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                closeBtn.focus();
+            }
+            if (e.key === 'Escape') {
+                closeBtn.click();
+            }
+        });
     }
-})(); 
+})();
