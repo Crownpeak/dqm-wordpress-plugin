@@ -189,15 +189,39 @@ function crownpeak_dqm_insights()
 
 function crownpeak_dqm_scan_handler()
 {
+
     $api_key = get_option('crownpeak_dqm_api_key', '');
     $website_id = get_option('crownpeak_dqm_website_id', '');
     $content = isset($_POST['content']) ? $_POST['content'] : '';
     $asset_id = isset($_POST['assetId']) ? sanitize_text_field($_POST['assetId']) : '';
     $method = isset($_POST['method']) ? sanitize_text_field(strtoupper($_POST['method'])) : 'POST';
-    if (empty($content)) {
-        wp_send_json(['success' => false, 'message' => 'No content provided.']);
+
+    if (empty($api_key) || !is_string($api_key) || strlen($api_key) < 10) {
+        wp_send_json(['success' => false, 'message' => 'Invalid API key.']);
         wp_die();
     }
+
+    if (empty($website_id) || !is_string($website_id) || strlen($website_id) < 3) {
+        wp_send_json(['success' => false, 'message' => 'Invalid Website ID.']);
+        wp_die();
+    }
+
+    if (empty($content) || !is_string($content) || strlen($content) < 10) {
+        wp_send_json(['success' => false, 'message' => 'No valid content provided.']);
+        wp_die();
+    }
+    
+    if (!empty($asset_id) && !preg_match('/^[a-zA-Z0-9\-_]+$/', $asset_id)) {
+        wp_send_json(['success' => false, 'message' => 'Invalid assetId format.']);
+        wp_die();
+    }
+    
+    $allowed_methods = ['POST', 'PUT'];
+    if (!in_array($method, $allowed_methods, true)) {
+        wp_send_json(['success' => false, 'message' => 'Invalid method.']);
+        wp_die();
+    }
+
     $response = null;
     $status_code = null;
     if ($method === 'PUT' && !empty($asset_id)) {
@@ -268,8 +292,10 @@ function crownpeak_dqm_scan_handler()
 
 function crownpeakDqmGetCheckpointsHandler()
 {
+
     $api_key = get_option('crownpeak_dqm_api_key', '');
-    if (empty($api_key) || !is_string($api_key)) {
+
+    if (empty($api_key) || !is_string($api_key) || strlen($api_key) < 10) {
         wp_send_json(['success' => false, 'message' => 'API key is missing or invalid.']);
         wp_die();
     }
@@ -310,10 +336,17 @@ function crownpeakDqmGetCheckpointsHandler()
 
 function crownpeak_dqm_spellcheck_handler()
 {
+
     $api_key = get_option('crownpeak_dqm_api_key', '');
     $asset_id = isset($_POST['assetId']) ? sanitize_text_field($_POST['assetId']) : '';
-    if (empty($asset_id)) {
-        wp_send_json(['success' => false, 'message' => 'No assetId provided.']);
+    
+    if (empty($api_key) || !is_string($api_key) || strlen($api_key) < 10) {
+        wp_send_json(['success' => false, 'message' => 'Invalid API key.']);
+        wp_die();
+    }
+    
+    if (empty($asset_id) || !preg_match('/^[a-zA-Z0-9\-_]+$/', $asset_id)) {
+        wp_send_json(['success' => false, 'message' => 'No valid assetId provided.']);
         wp_die();
     }
     $endpoint = 'https://api.crownpeak.net/dqm-cms/v1/assets/' . esc_url_raw($asset_id) . '/spellcheck?apiKey=' . $api_key;
