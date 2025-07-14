@@ -154,7 +154,7 @@
                 checkpointsList.appendChild(card);
             }
 
-            fetch(ajaxurl + '?action=crownpeak_dqm_get_checkpoints', { credentials: 'same-origin' })
+            fetch(ajaxurl + '?action=crownpeakDqmGetCheckpoints', { credentials: 'same-origin' })
                 .then(response => response.json())
                 .then(data => {
                     topicsLoading.style.display = 'none';
