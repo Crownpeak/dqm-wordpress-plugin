@@ -233,11 +233,11 @@
                 if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0 && allTopics && allTopics.size > 0) {
 
                     const topicColors = {
-                        'Accessibility': '#ff5630',
-                        'SEO': '#ff8b00',
-                        'Brand': '#0052cc',
+                        'Accessibility': '#006675',
+                        'SEO': '#2fe8b6',
+                        'Brand': '#3636c5',
                         'Regulatory': '#b604d4',
-                        'Legal': '#6d6d6d',
+                        'Legal': '#001746',
                         'Usability': '#36b37e',
                     };
                     html += `<div class="card">
