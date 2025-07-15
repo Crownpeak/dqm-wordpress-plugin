@@ -133,7 +133,11 @@
                             badgesDiv.className = 'checkpoint-badges';
                             badgesDiv.style.display = 'flex';
                             badgesDiv.style.marginTop = '4px';
-                            cp.topics.forEach(topic => {
+                            cp.topics.slice().sort((a, b) => {
+                                if (!a) return -1;
+                                if (!b) return 1;
+                                return a.localeCompare(b);
+                            }).forEach(topic => {
                                 const badge = document.createElement('span');
                                 badge.className = 'badge ' + (topic || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
                                 badge.textContent = topic;
