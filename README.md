@@ -45,9 +45,9 @@ This plugin integrates [Crownpeak DQM](https://www.crownpeak.com/firstspirit/pro
 
 ```
 crownpeak-dqm-plugin/
-├── dqm-wordpress-plugin.php       # Main plugin logic
-├── crownpeak-dqm-gutenberg.js     # Gutenberg JS integration
-└── crownpeak-dqm-gutenberg.css    # Admin styles
+├── dqm-wordpress-plugin.php              # Main plugin logic
+├── dqm-wordpress-plugin-gutenberg.js     # Gutenberg JS integration
+└── dqm-wordpress-plugin-gutenberg.css    # Admin styles
 ```
 
 ## 📸 Screenshots
