@@ -1,4 +1,5 @@
 (function addDqmCmsButton() {
+    let checkpointsList = null;
     const __ = window.wp && wp.i18n && wp.i18n.__ ? wp.i18n.__ : function (s) { return s; };
     const TABLIST_SELECTOR = 'div[role="tablist"][aria-orientation="horizontal"]';
     const BUTTON_ID = 'dqm-cms-tab';
@@ -52,7 +53,7 @@
             failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + __('Failed Checkpoints', 'dqm-wordpress-plugin');
             failedCheckpointsCard.appendChild(failedHeader);
             
-            const checkpointsList = document.createElement('div');
+            checkpointsList = document.createElement('div');
             checkpointsList.id = 'dqm-checkpoints-list';
             checkpointsList.className = '';
             failedCheckpointsCard.appendChild(checkpointsList);
@@ -87,10 +88,10 @@
                 } else {
                     const ul = document.createElement('ul');
                     ul.className = 'checkpoint-list';
-                    
                     failed.forEach(cp => {
                         const li = document.createElement('li');
                         li.className = 'checkpoint-item';
+                        li.setAttribute('data-checkpoint-id', cp.id);
                         const iconTitleDiv = document.createElement('div');
                         iconTitleDiv.className = 'checkpoint-icon-title';
 
@@ -103,16 +104,12 @@
                         iconDiv.className = 'checkpoint-icon failed';
                         iconDiv.textContent = '!';
                         iconDiv.style.cursor = 'pointer';
+                        iconDiv.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            showCheckpointDialog(cp);
+                        });
                         iconDiv.addEventListener('mouseenter', function (e) {
-                            showCheckpointDialog({
-                                name: cp.name,
-                                description: cp.description || '',
-                                topics: []
-                            });
-                            if (checkpointDialog) {
-                                const topicsDiv = checkpointDialog.querySelector('.dqm-modal-topics');
-                                if (topicsDiv) topicsDiv.style.display = 'none';
-                            }
+                            showCheckpointDialog(cp);
                         });
                         iconDiv.addEventListener('mouseleave', function (e) {
                             if (checkpointDialog) {
@@ -126,8 +123,10 @@
                         contentDiv.style.alignItems = 'flex-start';
                         const nameSpan = document.createElement('span');
                         nameSpan.textContent = cp.name;
-                        nameSpan.className = 'checkpoint-title';
+                        nameSpan.className = 'checkpoint-title checkpoint-label';
                         contentDiv.appendChild(nameSpan);
+
+                        let badgesAdded = false;
                         if (Array.isArray(cp.topics) && cp.topics.length > 0) {
                             const badgesDiv = document.createElement('div');
                             badgesDiv.className = 'checkpoint-badges';
@@ -144,6 +143,15 @@
                                 badgesDiv.appendChild(badge);
                             });
                             contentDiv.appendChild(badgesDiv);
+                            badgesAdded = true;
+                        }
+                        if (cp.canHighlight && cp.canHighlight.page === false) {
+                            const cannotHighlight = document.createElement('div');
+                            cannotHighlight.textContent = __('Cannot highlight', 'dqm-wordpress-plugin');
+                            cannotHighlight.style.color = '#ff5630';
+                            cannotHighlight.style.fontSize = '0.95em';
+                            cannotHighlight.style.marginTop = badgesAdded ? '0.25em' : '4px';
+                            contentDiv.appendChild(cannotHighlight);
                         }
 
                         iconTitleRow.appendChild(contentDiv);
@@ -313,8 +321,13 @@
                     const data = await resp.json();
                     checkpointStatusMap = {};
                     if (data && data.checkpoints && Array.isArray(data.checkpoints)) {
+                        allCheckpoints = data.checkpoints;
+                        allTopics = new Set();
                         data.checkpoints.forEach(cp => {
                             checkpointStatusMap[cp.id] = !!cp.failed;
+                            if (Array.isArray(cp.topics)) {
+                                cp.topics.forEach(t => allTopics.add(t));
+                            }
                         });
                         const total = data.checkpoints.length;
                         const passed = data.checkpoints.filter(cp => !cp.failed).length;
