@@ -12,7 +12,6 @@
     const PANEL_ID = 'dqm-cms-panel';
 
 function injectHighlightCSS() {
-    // Inject into main document
     if (!document.getElementById('dqm-highlight-styles')) {
         const style = document.createElement('style');
         style.id = 'dqm-highlight-styles';
@@ -50,7 +49,6 @@ function injectHighlightCSS() {
         document.head.appendChild(style);
     }
     
-    // Also inject into editor iframe if it exists
     const editorDoc = getEditorDocument();
     if (editorDoc && editorDoc !== document && !editorDoc.getElementById('dqm-highlight-styles')) {
         const iframeStyle = document.createElement('style');
@@ -90,7 +88,6 @@ function injectHighlightCSS() {
     }
 }
 function getEditorIframe() {
-    // Try different selectors for the editor iframe
     const iframeSelectors = [
         'iframe[name="editor-canvas"]',
         'iframe.editor-canvas__iframe',
@@ -120,150 +117,15 @@ function getEditorWindow() {
     function normalizeText(text) {
         return text
             .trim()
-            .replace(/&#8217;/g, "'")  // Replace HTML entity for apostrophe
-            .replace(/&#8220;|&#8221;/g, '"')  // Replace HTML entities for quotes
+            .replace(/&#8217;/g, "'")
+            .replace(/&#8220;|&#8221;/g, '"')
             .replace(/&amp;/g, '&')
             .replace(/&lt;/g, '<')
             .replace(/&gt;/g, '>')
-            .replace(/\s+/g, ' ');  // Normalize whitespace
+            .replace(/\s+/g, ' ');
     }
 
-    // Text matching functions
-    function exactTextMatch(elementText, searchText) {
-        return elementText === searchText;
-    }
-
-    function fuzzyTextMatch(elementText, searchText) {
-        // Remove extra whitespace and compare
-        const cleanElement = elementText.replace(/\s+/g, ' ').trim();
-        const cleanSearch = searchText.replace(/\s+/g, ' ').trim();
-        return cleanElement === cleanSearch;
-    }
-
-    function containsKeyWords(elementText, searchText) {
-        const elementLower = elementText.toLowerCase();
-        const searchLower = searchText.toLowerCase();
-        
-        // For longer texts, check if element contains a significant portion of search text
-        if (searchText.length > 20) {
-            const searchStart = searchLower.substring(0, 30);
-            return elementLower.includes(searchStart);
-        }
-        
-        return elementLower.includes(searchLower);
-    }
-function searchInAllEditableElements(searchText, checkpointName, index) {
-    const editorDoc = getEditorDocument();
-    
-    // Search in both main document and editor iframe
-    const contexts = [document, editorDoc];
-    
-    for (const context of contexts) {
-        const editableElements = context.querySelectorAll([
-            '[contenteditable="true"]',
-            '.block-editor-rich-text__editable',
-            '.wp-block[data-type]'
-        ].join(', '));
-        
-        for (const element of editableElements) {
-            const elementText = normalizeText(element.textContent || element.innerText || '');
-            
-            if (containsKeyWords(elementText, searchText)) {
-                addHighlight(element, checkpointName, index);
-                return; // Stop after first match
-            }
-        }
-    }
-}
-
-    function highlightElementsInEditor(highlightedData, checkpointName) {
-    console.log('[DQM] highlightElementsInEditor called', { highlightedData, checkpointName });
-    highlightedData.forEach((item, index) => {
-            const searchText = item.text;
-            const tagName = item.tagName;
-            
-            // More precise Gutenberg editor selectors
-            let selectors = [];
-            
-            if (tagName === 'h1') {
-                selectors = [
-                    '.wp-block-post-title',
-                    '.editor-post-title__input',
-                    '.wp-block-post-title[contenteditable="true"]',
-                    'h1.block-editor-rich-text__editable',
-                    'h1[data-type="core/post-title"]',
-                    '.editor-post-title',
-                    '.editor-visual-editor__post-title-wrapper h1'
-                ];
-            } else if (['h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-                selectors = [
-                    `.wp-block-heading[data-level="${tagName.substring(1)}"]`,
-                    `${tagName}.block-editor-rich-text__editable`,
-                    `${tagName}.wp-block-heading`,
-                    `[data-type="core/heading"] ${tagName}`,
-                    `${tagName}[contenteditable="true"]`
-                ];
-            } else if (tagName === 'p') {
-                selectors = [
-                    '.wp-block-paragraph .block-editor-rich-text__editable',
-                    'p.block-editor-rich-text__editable',
-                    '[data-type="core/paragraph"] p',
-                    'p[contenteditable="true"]'
-                ];
-            } else if (tagName === 'img') {
-                selectors = [
-                    '.wp-block-image img',
-                    '.wp-block-media-text img',
-                    '[data-type="core/image"] img',
-                    'img'
-                ];
-            } else if (tagName === 'a') {
-                selectors = [
-                    '.wp-block-button__link',
-                    'a[contenteditable="true"]',
-                    '.wp-element-button',
-                    'a'
-                ];
-            }
-            
-            // Try to find and highlight the matching element
-            let elementHighlighted = false;
-        const contexts = [document, getEditorDocument()];
-        
-        for (const context of contexts) {
-            for (const selector of selectors) {
-                const elements = context.querySelectorAll(selector);
-                console.log(`[DQM] Searching selector '${selector}', found ${elements.length} elements`);
-                
-                for (const element of elements) {
-                    const elementText = normalizeText(element.textContent || element.innerText || '');
-                    // Try different matching strategies
-                    if (exactTextMatch(elementText, searchText) || 
-                        fuzzyTextMatch(elementText, searchText) ||
-                        containsKeyWords(elementText, searchText)) {
-                        console.log('[DQM] Highlighting element', { element, searchText, checkpointName, index });
-                        addHighlight(element, checkpointName, index);
-                        elementHighlighted = true;
-                        break;
-                    }
-                }
-                if (elementHighlighted) break;
-            }
-            if (elementHighlighted) break;
-        }
-        
-        // If no specific element found, try broader search
-        if (!elementHighlighted) {
-            console.log('[DQM] No element found for selectors, using searchInAllEditableElements');
-            searchInAllEditableElements(searchText, checkpointName, index);
-        }
-    });
-}
-
-    // Function to highlight elements in the editor
     function highlightIssue(checkpointId, checkpointName) {
-        console.log('[DQM] highlightIssue called', { checkpointId, checkpointName, lastAssetId });
-        // Clear any existing highlights
         clearHighlights();
         if (!lastAssetId) {
             console.warn('[DQM] No asset ID available for highlighting');
@@ -271,7 +133,6 @@ function searchInAllEditableElements(searchText, checkpointName, index) {
         }
         const apiKey = CrownpeakDQM.apiKey;
         const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
-        console.log('[DQM] Fetching highlight data from', url);
         fetch(url, {
             headers: {
                 'x-api-key': apiKey,
@@ -280,157 +141,35 @@ function searchInAllEditableElements(searchText, checkpointName, index) {
         })
         .then(resp => resp.text())
         .then(htmlContent => {
-            // Parse the HTML response
             const parser = new DOMParser();
             const doc = parser.parseFromString(htmlContent, 'text/html');
-            // Find elements with yellow background and red border (highlighted issues)
-            const highlightedElements = doc.querySelectorAll('[style*="background:yellow"]');
-            console.log('[DQM] Highlighted elements found in API response:', highlightedElements.length);
+            const highlightedElements = doc.querySelectorAll('[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]');
+            
             if (highlightedElements.length > 0) {
-                // Extract and normalize text content from highlighted elements
-                const highlightedData = Array.from(highlightedElements).map(el => ({
-                    text: normalizeText(el.textContent || el.innerText || ''),
-                    html: el.outerHTML,
-                    tagName: el.tagName.toLowerCase(),
-                    // Also get the parent element info if needed
-                    parentTagName: el.parentElement ? el.parentElement.tagName.toLowerCase() : null
-                }));
-                console.log('[DQM] Highlighted data extracted:', highlightedData);
-                highlightElementsInEditor(highlightedData, checkpointName);
-            } else {
-                // Fallback to generic highlighting based on checkpoint name
-                console.log('[DQM] No highlighted elements found, using fallback.');
-                highlightBasedOnCheckpointType(checkpointName);
+                const editorDoc = getEditorDocument();
+                
+                highlightedElements.forEach((apiElement, index) => {
+                    const apiText = normalizeText(apiElement.textContent || apiElement.innerText || '');
+                    const apiTagName = apiElement.tagName.toLowerCase();
+                    
+                    const editorElements = editorDoc.querySelectorAll('*');
+                    
+                    for (const editorElement of editorElements) {
+                        const editorText = normalizeText(editorElement.textContent || editorElement.innerText || '');
+                        const editorTagName = editorElement.tagName.toLowerCase();
+                        
+
+                        if (apiTagName === editorTagName && apiText === editorText) {
+                            addHighlight(editorElement, checkpointName, index);
+                            break; 
+                        }
+                    }
+                });
             }
         })
         .catch(e => {
             console.warn('[DQM] Failed to fetch issue details:', e);
-            highlightBasedOnCheckpointType(checkpointName);
         });
-    }
-
-    // Function to highlight based on checkpoint type
-    function highlightBasedOnCheckpointType(checkpointName) {
-        const checkpointLower = checkpointName.toLowerCase();
-        
-        if (checkpointLower.includes('h1') || checkpointLower.includes('heading')) {
-            highlightH1Elements(checkpointName, 0);
-        } else if (checkpointLower.includes('image') || checkpointLower.includes('alt')) {
-            highlightImageElements(checkpointName, 0);
-        } else if (checkpointLower.includes('link') || checkpointLower.includes('button')) {
-            highlightLinkElements(checkpointName, 0);
-        } else if (checkpointLower.includes('title')) {
-            highlightTitleElements(checkpointName, 0);
-        } else {
-            // Try to highlight the main content area
-            highlightMainContent(checkpointName, 0);
-        }
-    }
-
-function highlightH1Elements(checkpointName, index) {
-    const editorDoc = getEditorDocument();
-    const contexts = [document, editorDoc];
-    
-    for (const context of contexts) {
-        const h1Elements = context.querySelectorAll([
-            '.wp-block-post-title',
-            'h1[contenteditable]',
-            '.editor-post-title',
-            '.wp-block-heading[data-level="1"]',
-            'h1.wp-block',
-            '.editor-visual-editor__post-title-wrapper h1'
-        ].join(', '));
-
-        if (h1Elements.length > 0) {
-            h1Elements.forEach((element, i) => {
-                if (index === 0 || i === index) {
-                    addHighlight(element, checkpointName, i);
-                }
-            });
-            return;
-        }
-    }
-    
-    // Fallback to any h1 elements
-    const fallbackH1 = document.querySelectorAll('h1');
-    if (fallbackH1.length > 0) {
-        addHighlight(fallbackH1[0], checkpointName, 0);
-    }
-}
-
-    function highlightTitleElements(checkpointName, index) {
-        const titleElements = document.querySelectorAll([
-            '.wp-block-post-title',
-            '.editor-post-title',
-            'title',
-            '[data-type="core/post-title"]'
-        ].join(', '));
-
-        titleElements.forEach((element, i) => {
-            if (index === 0 || i === index) {
-                addHighlight(element, checkpointName, i);
-            }
-        });
-    }
-
-    function highlightHeadingElements(checkpointName, index) {
-        const headingElements = document.querySelectorAll([
-            'h1, h2, h3, h4, h5, h6',
-            '.wp-block-heading',
-            '[data-type="core/heading"]',
-            '.block-editor-rich-text__editable[data-type="core/heading"]'
-        ].join(', '));
-
-        headingElements.forEach((element, i) => {
-            if (index === 0 || i === index) {
-                addHighlight(element, checkpointName, i);
-            }
-        });
-    }
-
-    function highlightImageElements(checkpointName, index) {
-        const imageElements = document.querySelectorAll([
-            'img',
-            '.wp-block-image',
-            '[data-type="core/image"]',
-            '.wp-block-media-text img'
-        ].join(', '));
-
-        imageElements.forEach((element, i) => {
-            if (index === 0 || i === index) {
-                addHighlight(element, checkpointName, i);
-            }
-        });
-    }
-
-    function highlightLinkElements(checkpointName, index) {
-        const linkElements = document.querySelectorAll([
-            'a',
-            '.wp-block-button__link',
-            '[data-type="core/button"]',
-            '.wp-element-button'
-        ].join(', '));
-
-        linkElements.forEach((element, i) => {
-            if (index === 0 || i === index) {
-                addHighlight(element, checkpointName, i);
-            }
-        });
-    }
-
-    function highlightMainContent(checkpointName, index) {
-        // Fallback: highlight the main content areas
-        const contentElements = document.querySelectorAll([
-            '.wp-block-post-content',
-            '.editor-post-content',
-            '.block-editor-block-list__layout > *',
-            '.is-root-container > *'
-        ].join(', '));
-
-        if (contentElements.length > 0) {
-            const targetElement = contentElements[Math.min(index, contentElements.length - 1)];
-            addHighlight(targetElement, checkpointName, index);
-        }
     }
 
     function addHighlight(element, checkpointName, index) {
@@ -438,35 +177,27 @@ function highlightH1Elements(checkpointName, index) {
             console.warn('[DQM] addHighlight called with null element', { checkpointName, index });
             return;
         }
-        console.log('[DQM] addHighlight', { element, checkpointName, index });
-        // Remove any existing highlights first
         element.classList.remove('dqm-highlight');
         const existingIndicator = element.querySelector('.dqm-highlight-indicator');
         if (existingIndicator) {
             existingIndicator.remove();
         }
-        // Add highlight class and styling
         element.classList.add('dqm-highlight');
         element.setAttribute('data-dqm-checkpoint', checkpointName);
-        // Store original position for cleanup
         const originalPosition = element.style.position;
         element.setAttribute('data-original-position', originalPosition);
-        // Ensure the element has relative positioning for the indicator
         if (!originalPosition || originalPosition === 'static') {
             element.style.position = 'relative';
         }
-        // Add indicator
         const indicator = document.createElement('div');
         indicator.className = 'dqm-highlight-indicator';
         indicator.textContent = `Issue ${index + 1}`;
         element.appendChild(indicator);
-        // Scroll into view with better positioning
         element.scrollIntoView({ 
             behavior: 'smooth', 
             block: 'center',
             inline: 'nearest'
         });
-        // Auto-remove highlight after 15 seconds
         setTimeout(() => {
             removeHighlight(element);
         }, 15000);
@@ -478,7 +209,6 @@ function highlightH1Elements(checkpointName, index) {
         element.classList.remove('dqm-highlight');
         element.removeAttribute('data-dqm-checkpoint');
         
-        // Restore original position
         const originalPosition = element.getAttribute('data-original-position');
         if (originalPosition && originalPosition !== 'null') {
             element.style.position = originalPosition;
@@ -493,7 +223,6 @@ function highlightH1Elements(checkpointName, index) {
         }
     }
 function clearHighlights() {
-    // Clear highlights in both main document and iframe
     const contexts = [document, getEditorDocument()];
     
     contexts.forEach(context => {
@@ -501,7 +230,7 @@ function clearHighlights() {
             removeHighlight(element);
         });
     });
-}// Wait for iframe to load
+}
 function waitForIframe(callback) {
     const iframe = getEditorIframe();
     if (!iframe) {
@@ -516,14 +245,11 @@ function waitForIframe(callback) {
     }
 }
 
-// Use this in your functions that need the iframe
 function withEditorIframe(callback) {
     waitForIframe(callback);
-}// In your main function, wait for the iframe to be ready
-// In your main function, wait for the iframe to be ready
+}
 waitForIframe(() => {
-    // Now you can safely access the iframe content
-    injectHighlightCSS(); // Ensure CSS is injected into iframe
+    injectHighlightCSS();
     injectButton();
     handleTabSwitch();
 });
@@ -610,13 +336,11 @@ injectHighlightCSS();
                         li.setAttribute('data-checkpoint-id', cp.id);
                         li.style.cursor = 'pointer';
                         
-                        // Add click handler for highlighting
                         li.addEventListener('click', function(e) {
                             e.stopPropagation();
                             if (cp.canHighlight && cp.canHighlight.page) {
                                 highlightIssue(cp.id, cp.name);
                             } else {
-                                // Show tooltip that highlighting is not available
                                 const tooltip = document.createElement('div');
                                 tooltip.style.position = 'fixed';
                                 tooltip.style.background = '#333';
@@ -714,10 +438,8 @@ injectHighlightCSS();
                 checkpointsList.appendChild(card);
             }
 
-            // Inject CSS for highlighting
             injectHighlightCSS();
 
-            // Rest of the existing code remains the same...
             fetch(ajaxurl + '?action=crownpeakDqmGetCheckpoints', { credentials: 'same-origin' })
                 .then(response => response.json())
                 .then(data => {
