@@ -100,76 +100,88 @@
     }
 
     function highlightIssue(checkpointId, checkpointName) {
-        if (currentHighlightedCheckpointId === checkpointId) {
-            clearHighlights();
-            currentHighlightedCheckpointId = null;
-            updateCheckpointActiveState(null);
-            return;
-        }
+      if (currentHighlightedCheckpointId === checkpointId) {
         clearHighlights();
-        currentHighlightedCheckpointId = checkpointId;
-        updateCheckpointActiveState(checkpointId);
+        currentHighlightedCheckpointId = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
+      clearHighlights();
+      currentHighlightedCheckpointId = checkpointId;
+      updateCheckpointActiveState(checkpointId);
 
-        if (!lastAssetId) {
-            showNotification(__('Please run a quality check first to enable highlighting.', 'dqm-wordpress-plugin'));
-            currentHighlightedCheckpointId = null;
-            updateCheckpointActiveState(null);
-            return;
-        }
+      if (!lastAssetId) {
+        showNotification(
+          __(
+            "Please run a quality check first to enable highlighting.",
+            "dqm-wordpress-plugin"
+          )
+        );
+        currentHighlightedCheckpointId = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
 
-        const checkpoint = allCheckpoints.find(cp => cp.id === checkpointId);
-        if (!checkpoint || !checkpoint.canHighlight) {
-            showNotification(__('Cannot highlight this checkpoint.', 'dqm-wordpress-plugin'));
-            currentHighlightedCheckpointId = null;
-            updateCheckpointActiveState(null);
-            return;
-        }
+      const checkpoint = allCheckpoints.find((cp) => cp.id === checkpointId);
+      if (!checkpoint || !checkpoint.canHighlight) {
+        showNotification(
+          __("Cannot highlight this checkpoint.", "dqm-wordpress-plugin")
+        );
+        currentHighlightedCheckpointId = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
 
-        const canHighlightPage = checkpoint.canHighlight.page === true;
-        const canHighlightSource = checkpoint.canHighlight.source === true;
+      const canHighlightPage = checkpoint.canHighlight.page === true;
+      const canHighlightSource = checkpoint.canHighlight.source === true;
 
-        if (!canHighlightPage && !canHighlightSource) {
-            showNotification(__('Cannot highlight this checkpoint.', 'dqm-wordpress-plugin'));
-            currentHighlightedCheckpointId = null;
-            updateCheckpointActiveState(null);
-            return;
-        }
+      if (!canHighlightPage && !canHighlightSource) {
+        showNotification(
+          __("Cannot highlight this checkpoint.", "dqm-wordpress-plugin")
+        );
+        currentHighlightedCheckpointId = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
 
-        const apiKey = CrownpeakDQM.apiKey;
+      const apiKey = CrownpeakDQM.apiKey;
 
-        if (canHighlightPage) {
-            const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
-            fetch(url, {
-                headers: {
-                    'x-api-key': apiKey,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                }
-            })
-            .then((resp) => resp.text())
-            .then((htmlContent) => {
-                const foundInEditor = extractAndApplyHighlighting(htmlContent);
-                if (!foundInEditor) {
-                    if (canHighlightSource) {
-                        showSourceInEditor(checkpointId);
-                    } else {
-                        showPreviewContentDialog(checkpointId, checkpointName, htmlContent);
-                    }
-                }
-            })
-            .catch((e) => {
-                console.warn("[DQM] Failed to fetch page issue details:", e);
-                if (canHighlightSource) {
-                    showSourceInEditor(checkpointId);
-                } else {
-                    showNotification(__('Failed to load issue details: ', 'dqm-wordpress-plugin') + e.message);
-                    currentHighlightedCheckpointId = null;
-                    updateCheckpointActiveState(null);
-                }
-            });
-        }
-        else if (canHighlightSource) {
-            showSourceInEditor(checkpointId);
-        }
+      if (canHighlightPage) {
+        const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
+        fetch(url, {
+          headers: {
+            "x-api-key": apiKey,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        })
+          .then((resp) => resp.text())
+          .then((htmlContent) => {
+            const foundInEditor = extractAndApplyHighlighting(htmlContent);
+            if (!foundInEditor) {
+              showPreviewContentDialog(
+                checkpointId,
+                checkpointName,
+                htmlContent
+              );
+            }
+          })
+          .catch((e) => {
+            console.warn("[DQM] Failed to fetch page issue details:", e);
+            if (canHighlightSource) {
+              showSourceInEditor(checkpointId);
+            } else {
+              showNotification(
+                __("Failed to load issue details: ", "dqm-wordpress-plugin") +
+                  e.message
+              );
+              currentHighlightedCheckpointId = null;
+              updateCheckpointActiveState(null);
+            }
+          });
+      }
+      else if (canHighlightSource) {
+        showSourceInEditor(checkpointId);
+      }
     }
 
     function showSourceInEditor(checkpointId) {
