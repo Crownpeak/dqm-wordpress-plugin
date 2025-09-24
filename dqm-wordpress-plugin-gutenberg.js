@@ -12,29 +12,8 @@
     const PANEL_ID = 'dqm-cms-panel';
 
     function injectHighlightCSS() {
-        const editorDoc = getEditorDocument();
-        if (editorDoc && editorDoc !== document && !editorDoc.getElementById('dqm-highlight-styles')) {
-            const possibleSelectors = [
-                'link[href*="dqm-wordpress-plugin-gutenberg.css"]',
-                'link[id*="dqm-wordpress-plugin-gutenberg-css"]',
-                'link[id="dqm-wordpress-plugin-gutenberg-css-css"]'
-            ];
-
-            let mainCssLink = null;
-            for (const selector of possibleSelectors) {
-                mainCssLink = document.querySelector(selector);
-                if (mainCssLink) break;
-            }
-
-            if (mainCssLink && mainCssLink.href) {
-                const link = document.createElement('link');
-                link.id = 'dqm-highlight-styles';
-                link.rel = 'stylesheet';
-                link.href = mainCssLink.href;
-                editorDoc.head.appendChild(link);
-            }
-        }
-    }
+    return;
+}
     function getEditorIframe() {
         const iframeSelectors = [
             'iframe[name="editor-canvas"]',
@@ -58,10 +37,6 @@
         return iframe ? iframe.contentDocument : document;
     }
 
-    function getEditorWindow() {
-        const iframe = getEditorIframe();
-        return iframe ? iframe.contentWindow : window;
-    }
     function normalizeText(text) {
         return text
             .trim()
@@ -76,105 +51,106 @@
     let currentHighlightedCheckpointId = null;
 
     function highlightIssue(checkpointId, checkpointName) {
-        if (currentHighlightedCheckpointId === checkpointId) {
-            clearHighlights();
-            currentHighlightedCheckpointId = null;
-            updateCheckpointActiveState(null);
-            return;
-        }
+      if (currentHighlightedCheckpointId === checkpointId) {
         clearHighlights();
-        currentHighlightedCheckpointId = checkpointId;
-        updateCheckpointActiveState(checkpointId);
+        currentHighlightedCheckpointId = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
+      clearHighlights();
+      currentHighlightedCheckpointId = checkpointId;
+      updateCheckpointActiveState(checkpointId);
 
-        if (!lastAssetId) {
+      if (!lastAssetId) {
             console.warn('[DQM] No asset ID available for highlighting');
-            return;
-        }
-        const apiKey = CrownpeakDQM.apiKey;
-        const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
-        fetch(url, {
-            headers: {
+        return;
+      }
+      const apiKey = CrownpeakDQM.apiKey;
+      const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
+      fetch(url, {
+        headers: {
                 'x-api-key': apiKey,
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
+      })
+        .then((resp) => resp.text())
+        .then((htmlContent) => {
+          extractAndApplyHighlighting(htmlContent);
         })
-            .then(resp => resp.text())
-            .then(htmlContent => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(htmlContent, 'text/html');
-                const highlightedElements = doc.querySelectorAll('[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]');
-
-                if (highlightedElements.length > 0) {
-                    const editorDoc = getEditorDocument();
-
-                    highlightedElements.forEach((apiElement, index) => {
-                        const apiText = normalizeText(apiElement.textContent || apiElement.innerText || '');
-                        const apiTagName = apiElement.tagName.toLowerCase();
-
-                        const editorElements = editorDoc.querySelectorAll('*');
-
-                        for (const editorElement of editorElements) {
-                            const editorText = normalizeText(editorElement.textContent || editorElement.innerText || '');
-                            const editorTagName = editorElement.tagName.toLowerCase();
-
-
-                            if (apiTagName === editorTagName && apiText === editorText) {
-                                addHighlight(editorElement, checkpointName, index);
-                                break;
-                            }
-                        }
-                    });
-                }
-            })
-            .catch(e => {
-                console.warn('[DQM] Failed to fetch issue details:', e);
-            });
+        .catch((e) => {
+          console.warn("[DQM] Failed to fetch issue details:", e);
+        });
     }
 
-    function addHighlight(element, checkpointName, index) {
-        if (!element) {
-            console.warn('[DQM] addHighlight called with null element', { checkpointName, index });
+    function extractAndApplyHighlighting(apiResponseHtml) {
+      const parser = new DOMParser();
+      const apiDoc = parser.parseFromString(apiResponseHtml, "text/html");
+      const editorDoc = getEditorDocument();
+      const highlightedElements = apiDoc.querySelectorAll(
+        '[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]'
+      );
+
+      if (highlightedElements.length === 0) {
+        console.warn("[DQM] No highlighted elements found in API response");
+        return;
+      }
+
+      highlightedElements.forEach((apiElement, index) => {
+        const apiText = normalizeText(
+          apiElement.textContent || apiElement.innerText || ""
+        );
+        const apiTagName = apiElement.tagName.toLowerCase();
+
+        const editorElements = editorDoc.querySelectorAll(apiTagName);
+
+        for (const editorElement of editorElements) {
+          const editorText = normalizeText(
+            editorElement.textContent || editorElement.innerText || ""
+          );
+
+          if (apiText === editorText) {
+            applyApiHighlighting(editorElement, apiElement, index);
+            break;
+          }
+        }
+      });
+    }
+
+    function applyApiHighlighting(editorElement, apiElement, index) {
+        if (!editorElement || !apiElement) {
+            console.warn('[DQM] applyApiHighlighting called with null element', { index });
             return;
         }
-        element.classList.remove('dqm-highlight');
-        element.classList.add('dqm-highlight');
-        element.setAttribute('data-dqm-checkpoint', checkpointName);
-        const originalPosition = element.style.position;
-        element.setAttribute('data-original-position', originalPosition);
-        if (!originalPosition || originalPosition === 'static') {
-            element.style.position = 'relative';
+
+        if (!editorElement.hasAttribute('data-original-style')) {
+            editorElement.setAttribute('data-original-style', editorElement.style.cssText || '');
         }
-        element.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
-            inline: 'nearest'
-        });
-    }
-
-    function removeHighlight(element) {
-        if (!element) return;
-
-        element.classList.remove('dqm-highlight');
-        element.removeAttribute('data-dqm-checkpoint');
-
-        const originalPosition = element.getAttribute('data-original-position');
-        if (originalPosition && originalPosition !== 'null') {
-            element.style.position = originalPosition;
-        } else {
-            element.style.position = '';
-        }
-        element.removeAttribute('data-original-position');
-    }
-    function clearHighlights() {
-        const contexts = [document, getEditorDocument()];
-
-        contexts.forEach(context => {
-            context.querySelectorAll('.dqm-highlight').forEach(element => {
-                removeHighlight(element);
+        
+        const apiStyle = apiElement.getAttribute('style') || '';
+        editorElement.setAttribute('style', apiStyle);
+        
+        editorElement.setAttribute('data-dqm-highlighted', 'true');
+        if (index === 0) {
+            editorElement.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'nearest'
             });
-        });
-        currentHighlightedCheckpointId = null;
+        }
     }
+function clearHighlights() {
+    const contexts = [document, getEditorDocument()];
+    
+    contexts.forEach(context => {
+        context.querySelectorAll('[data-dqm-highlighted="true"]').forEach(element => {
+            const originalStyle = element.getAttribute('data-original-style') || '';
+            element.setAttribute('style', originalStyle);
+            element.removeAttribute('data-dqm-highlighted');
+            element.removeAttribute('data-original-style');
+        });
+    });
+    currentHighlightedCheckpointId = null;
+}
 
     function updateCheckpointActiveState(activeCheckpointId) {
         document.querySelectorAll('.checkpoint-item').forEach(item => {
