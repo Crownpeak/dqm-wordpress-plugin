@@ -12,8 +12,8 @@
     const PANEL_ID = 'dqm-cms-panel';
 
     function injectHighlightCSS() {
-    return;
-}
+        return;
+    }
     function getEditorIframe() {
         const iframeSelectors = [
             'iframe[name="editor-canvas"]',
@@ -50,70 +50,239 @@
 
     let currentHighlightedCheckpointId = null;
 
-    function highlightIssue(checkpointId, checkpointName) {
-      if (currentHighlightedCheckpointId === checkpointId) {
-        clearHighlights();
-        currentHighlightedCheckpointId = null;
-        updateCheckpointActiveState(null);
-        return;
-      }
-      clearHighlights();
-      currentHighlightedCheckpointId = checkpointId;
-      updateCheckpointActiveState(checkpointId);
+    function showNotification(message, type = 'error') {
+        const notification = document.createElement('div');
+        notification.className = `dqm-notification ${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 5000);
+    }
 
-      if (!lastAssetId) {
-            console.warn('[DQM] No asset ID available for highlighting');
-        return;
-      }
-      const apiKey = CrownpeakDQM.apiKey;
-      const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
-      fetch(url, {
-        headers: {
-                'x-api-key': apiKey,
-                'Content-Type': 'application/x-www-form-urlencoded'
+    function showPreviewContentDialog(checkpointId, checkpointName, highlightedHtml) {
+    const parser = new DOMParser();
+    const apiDoc = parser.parseFromString(highlightedHtml, "text/html");
+        const highlightedElements = apiDoc.querySelectorAll('[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]');
+
+    let contentHtml =
+        '<p class="dqm-preview-subtitle">' +
+        __(
+        "This issue was found in the preview content. The highlighted text below shows where the problem occurs:",
+        "dqm-wordpress-plugin"
+        ) +
+        "</p>";
+
+    if (highlightedElements.length > 0) {
+        contentHtml += '<div class="dqm-preview-content-wrapper">';
+        highlightedElements.forEach((element, index) => {
+        if (index > 0) {
+            contentHtml += '<hr class="dqm-preview-content-divider">';
+        }
+        contentHtml += `<div class="dqm-preview-issue-header">Issue ${
+            index + 1
+        }:</div>`;
+        contentHtml += `<div class="dqm-preview-code-block">${element.outerHTML}</div>`;
+        });
+            contentHtml += '</div>';
+    } else {
+        contentHtml +=
+        '<div class="dqm-preview-no-content">' +
+        __("No highlighted content could be extracted.", "dqm-wordpress-plugin") +
+        "</div>";
+    }
+
+    const cp = {
+            name: checkpointName + ' - ' + __('Found in Preview', 'dqm-wordpress-plugin'),
+        description: contentHtml,
+        topics: ["Preview Content"],
+    };
+
+    showCheckpointDialog(cp);
+    }
+
+    function highlightIssue(checkpointId, checkpointName) {
+        if (currentHighlightedCheckpointId === checkpointId) {
+            clearHighlights();
+            currentHighlightedCheckpointId = null;
+            updateCheckpointActiveState(null);
+            return;
+        }
+        clearHighlights();
+        currentHighlightedCheckpointId = checkpointId;
+        updateCheckpointActiveState(checkpointId);
+
+        if (!lastAssetId) {
+            showNotification(__('Please run a quality check first to enable highlighting.', 'dqm-wordpress-plugin'));
+            currentHighlightedCheckpointId = null;
+            updateCheckpointActiveState(null);
+            return;
+        }
+
+        const checkpoint = allCheckpoints.find(cp => cp.id === checkpointId);
+        if (!checkpoint || !checkpoint.canHighlight) {
+            showNotification(__('Cannot highlight this checkpoint.', 'dqm-wordpress-plugin'));
+            currentHighlightedCheckpointId = null;
+            updateCheckpointActiveState(null);
+            return;
+        }
+
+        const canHighlightPage = checkpoint.canHighlight.page === true;
+        const canHighlightSource = checkpoint.canHighlight.source === true;
+
+        if (!canHighlightPage && !canHighlightSource) {
+            showNotification(__('Cannot highlight this checkpoint.', 'dqm-wordpress-plugin'));
+            currentHighlightedCheckpointId = null;
+            updateCheckpointActiveState(null);
+            return;
+        }
+
+        const apiKey = CrownpeakDQM.apiKey;
+
+        if (canHighlightPage) {
+            const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
+            fetch(url, {
+                headers: {
+                    'x-api-key': apiKey,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            })
+            .then((resp) => resp.text())
+            .then((htmlContent) => {
+                const foundInEditor = extractAndApplyHighlighting(htmlContent);
+                if (!foundInEditor) {
+                    if (canHighlightSource) {
+                        showSourceInEditor(checkpointId);
+                    } else {
+                        showPreviewContentDialog(checkpointId, checkpointName, htmlContent);
+                    }
+                }
+            })
+            .catch((e) => {
+                console.warn("[DQM] Failed to fetch page issue details:", e);
+                if (canHighlightSource) {
+                    showSourceInEditor(checkpointId);
+                } else {
+                    showNotification(__('Failed to load issue details: ', 'dqm-wordpress-plugin') + e.message);
+                    currentHighlightedCheckpointId = null;
+                    updateCheckpointActiveState(null);
+                }
+            });
+        }
+        else if (canHighlightSource) {
+            showSourceInEditor(checkpointId);
+        }
+    }
+
+    function showSourceInEditor(checkpointId) {
+        const apiKey = CrownpeakDQM.apiKey;
+        const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}&highlightSource=true`;
+        
+        fetch(url, {
+            headers: {
+                'x-api-key': apiKey
             }
-      })
+        })
         .then((resp) => resp.text())
-        .then((htmlContent) => {
-          extractAndApplyHighlighting(htmlContent);
+        .then((sourceHtml) => {
+            replaceEditorWithSource(sourceHtml);
         })
         .catch((e) => {
-          console.warn("[DQM] Failed to fetch issue details:", e);
+            console.warn("[DQM] Failed to fetch source highlighting:", e);
+            showNotification(__('Failed to load source details: ', 'dqm-wordpress-plugin') + e.message);
+            currentHighlightedCheckpointId = null;
+            updateCheckpointActiveState(null);
         });
     }
 
-    function extractAndApplyHighlighting(apiResponseHtml) {
-      const parser = new DOMParser();
-      const apiDoc = parser.parseFromString(apiResponseHtml, "text/html");
-      const editorDoc = getEditorDocument();
-      const highlightedElements = apiDoc.querySelectorAll(
-        '[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]'
-      );
-
-      if (highlightedElements.length === 0) {
-        console.warn("[DQM] No highlighted elements found in API response");
-        return;
-      }
-
-      highlightedElements.forEach((apiElement, index) => {
-        const apiText = normalizeText(
-          apiElement.textContent || apiElement.innerText || ""
-        );
-        const apiTagName = apiElement.tagName.toLowerCase();
-
-        const editorElements = editorDoc.querySelectorAll(apiTagName);
-
-        for (const editorElement of editorElements) {
-          const editorText = normalizeText(
-            editorElement.textContent || editorElement.innerText || ""
-          );
-
-          if (apiText === editorText) {
-            applyApiHighlighting(editorElement, apiElement, index);
-            break;
-          }
+    function replaceEditorWithSource(sourceHtml) {
+        const iframe = getEditorIframe();
+        if (!iframe || !iframe.contentDocument) {
+            showNotification(__('Cannot access editor content.', 'dqm-wordpress-plugin'));
+            currentHighlightedCheckpointId = null;
+            updateCheckpointActiveState(null);
+            return;
         }
-      });
+
+        const editorDoc = iframe.contentDocument;
+        const editorBody = editorDoc.body;
+        
+        if (!editorBody) {
+            showNotification(__('Cannot access editor body.', 'dqm-wordpress-plugin'));
+            currentHighlightedCheckpointId = null;
+            updateCheckpointActiveState(null);
+            return;
+        }
+        if (!editorBody.hasAttribute('data-dqm-original-content')) {
+            editorBody.setAttribute('data-dqm-original-content', editorBody.innerHTML);
+        }
+        editorBody.innerHTML = sourceHtml;
+        editorBody.setAttribute('data-dqm-source-view', 'true');
+        setTimeout(() => {
+            const firstError = editorBody.querySelector('.errorIcon i, [style*="background:yellow"]');
+            if (firstError) {
+                firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
+    }
+
+    function clearHighlights() {
+        const contexts = [document, getEditorDocument()];
+        
+        contexts.forEach(context => {
+            context.querySelectorAll('[data-dqm-highlighted="true"]').forEach(element => {
+                const originalStyle = element.getAttribute('data-original-style') || '';
+                element.setAttribute('style', originalStyle);
+                element.removeAttribute('data-dqm-highlighted');
+                element.removeAttribute('data-original-style');
+            });
+            
+            if (context.body && context.body.hasAttribute('data-dqm-source-view')) {
+                const originalContent = context.body.getAttribute('data-dqm-original-content');
+                if (originalContent) {
+                    context.body.innerHTML = originalContent;
+                }
+                context.body.removeAttribute('data-dqm-original-content');
+                context.body.removeAttribute('data-dqm-source-view');
+            }
+        });
+        
+        currentHighlightedCheckpointId = null;
+    }
+
+    function extractAndApplyHighlighting(apiResponseHtml) {
+        const parser = new DOMParser();
+        const apiDoc = parser.parseFromString(apiResponseHtml, "text/html");
+        const editorDoc = getEditorDocument();
+        const highlightedElements = apiDoc.querySelectorAll(
+            '[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]'
+        );
+
+        if (highlightedElements.length === 0) {
+            console.warn("[DQM] No highlighted elements found in API response");
+            return false;
+        }
+        let foundInEditor = false;
+
+        highlightedElements.forEach((apiElement, index) => {
+            const apiText = normalizeText(
+                apiElement.textContent || apiElement.innerText || ""
+            );
+            const apiTagName = apiElement.tagName.toLowerCase();
+
+            const editorElements = editorDoc.querySelectorAll(apiTagName);
+
+            for (const editorElement of editorElements) {
+                const editorText = normalizeText(
+                    editorElement.textContent || editorElement.innerText || ""
+                );
+
+                if (apiText === editorText) {
+                    applyApiHighlighting(editorElement, apiElement, index);
+                    foundInEditor = true;
+                    break;
+                }
+            }
+        });
+        return foundInEditor;
     }
 
     function applyApiHighlighting(editorElement, apiElement, index) {
@@ -138,19 +307,6 @@
             });
         }
     }
-function clearHighlights() {
-    const contexts = [document, getEditorDocument()];
-    
-    contexts.forEach(context => {
-        context.querySelectorAll('[data-dqm-highlighted="true"]').forEach(element => {
-            const originalStyle = element.getAttribute('data-original-style') || '';
-            element.setAttribute('style', originalStyle);
-            element.removeAttribute('data-dqm-highlighted');
-            element.removeAttribute('data-original-style');
-        });
-    });
-    currentHighlightedCheckpointId = null;
-}
 
     function updateCheckpointActiveState(activeCheckpointId) {
         document.querySelectorAll('.checkpoint-item').forEach(item => {
@@ -178,9 +334,6 @@ function clearHighlights() {
         }
     }
 
-    function withEditorIframe(callback) {
-        waitForIframe(callback);
-    }
     waitForIframe(() => {
         injectHighlightCSS();
         injectButton();
@@ -258,7 +411,11 @@ function clearHighlights() {
                         li.className = 'checkpoint-item';
                         li.setAttribute('data-checkpoint-id', cp.id);
 
-                        if (cp.canHighlight && cp.canHighlight.page) {
+                        const canHighlightPage = cp.canHighlight && cp.canHighlight.page === true;
+                        const canHighlightSource = cp.canHighlight && cp.canHighlight.source === true;
+                        const canHighlightAny = canHighlightPage || canHighlightSource;
+
+                        if (canHighlightAny) {
                             li.addEventListener('click', function (e) {
                                 e.stopPropagation();
                                 highlightIssue(cp.id, cp.name);
@@ -313,12 +470,12 @@ function clearHighlights() {
                             contentDiv.appendChild(badgesDiv);
                             badgesAdded = true;
                         }
-                        if (cp.canHighlight && cp.canHighlight.page === false) {
+                        if (cp.canHighlight && !canHighlightAny) {
                             const cannotHighlight = document.createElement('div');
                             cannotHighlight.className = 'checkpoint-no-highlight';
                             cannotHighlight.textContent = __('Cannot highlight', 'dqm-wordpress-plugin');
                             contentDiv.appendChild(cannotHighlight);
-                        } else if (cp.canHighlight && cp.canHighlight.page === true) {
+                        } else if (canHighlightAny) {
                             const canHighlight = document.createElement('div');
                             canHighlight.className = 'checkpoint-highlight-info';
                             canHighlight.textContent = __('Click to highlight', 'dqm-wordpress-plugin');
@@ -858,72 +1015,4 @@ function clearHighlights() {
     });
 
     let checkpointIssuesDialog = null;
-    function showCheckpointIssuesDialog(assetId, checkpointId, checkpointName) {
-        if (!checkpointIssuesDialog) {
-            checkpointIssuesDialog = document.createElement('div');
-            checkpointIssuesDialog.id = 'dqm-checkpoint-issues-dialog';
-            checkpointIssuesDialog.setAttribute('role', 'dialog');
-            checkpointIssuesDialog.setAttribute('aria-modal', 'true');
-            checkpointIssuesDialog.setAttribute('tabindex', '-1');
-            document.body.appendChild(checkpointIssuesDialog);
-        }
-        checkpointIssuesDialog.innerHTML = '';
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '×';
-        closeBtn.className = 'dqm-dialog-close';
-        closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
-        closeBtn.onclick = () => {
-            checkpointIssuesDialog.style.display = 'none';
-            if (checkpointIssuesDialog._lastActiveElement) {
-                checkpointIssuesDialog._lastActiveElement.focus();
-            }
-        };
-        checkpointIssuesDialog.appendChild(closeBtn);
-        const name = document.createElement('div');
-        name.className = 'dqm-dialog-title';
-        name.textContent = checkpointName + ' - ' + __('Issues', 'dqm-wordpress-plugin');
-        checkpointIssuesDialog.appendChild(name);
-        const contentDiv = document.createElement('div');
-        contentDiv.textContent = __('Loading issues...', 'dqm-wordpress-plugin');
-        checkpointIssuesDialog.appendChild(contentDiv);
-        const apiKey = CrownpeakDQM.apiKey;
-        const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${assetId}/errors/${checkpointId}?apiKey=${apiKey}`;
-        fetch(url, {
-            headers: {
-                'x-api-key': apiKey,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-        })
-            .then(resp => resp.json())
-            .then(data => {
-                let html = '';
-                if (data && data.statusCode && data.message) {
-                    html = `<div>${data.message}</div>`;
-                } else if (data && Array.isArray(data.issues) && data.issues.length > 0) {
-                    html += '<ul>';
-                    data.issues.forEach(issue => {
-                        html += `<li>${issue.message || JSON.stringify(issue)}</li>`;
-                    });
-                    html += '</ul>';
-                } else {
-                    html += '<div>' + __('No issues found for this checkpoint.', 'dqm-wordpress-plugin') + '</div>';
-                }
-                contentDiv.innerHTML = html;
-            })
-            .catch(e => {
-                contentDiv.innerHTML = '<div>' + __('Failed to load issues: ', 'dqm-wordpress-plugin') + e.message + '</div>';
-            });
-        checkpointIssuesDialog.style.display = 'block';
-        checkpointIssuesDialog._lastActiveElement = document.activeElement;
-        closeBtn.focus();
-        checkpointIssuesDialog.addEventListener('keydown', function (e) {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                closeBtn.focus();
-            }
-            if (e.key === 'Escape') {
-                closeBtn.click();
-            }
-        });
-    }
 })();
