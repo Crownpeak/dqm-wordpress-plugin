@@ -69,7 +69,7 @@
     let contentHtml =
         '<p class="dqm-preview-subtitle">' +
         __(
-        "This issue was found in the preview content. The highlighted text below shows where the problem occurs:",
+        "This issue was found in the preview content so not visible in editor page. The highlighted text below shows where the problem occurs:",
         "dqm-wordpress-plugin"
         ) +
         "</p>";
@@ -108,6 +108,9 @@
         currentHighlightedCheckpointId = null;
         currentCheckpointForToggle = null;
         updateCheckpointActiveState(null);
+        if (checkpointDialog && checkpointDialog.style.display !== "none") {
+          checkpointDialog.style.display = "none";
+        }
         return;
       }
 
@@ -195,12 +198,38 @@
     }
 
     function toggleHighlightMode(checkpointId, checkpointName) {
-    const newMode = currentHighlightMode === 'page' ? 'source' : 'page';
-    clearHighlights(true);
-    currentHighlightMode = newMode;
-    updateToggleButtonText();
-    performHighlighting(checkpointId, checkpointName, newMode);
-}
+      const checkpoint = allCheckpoints.find((cp) => cp.id === checkpointId);
+      if (!checkpoint) return;
+
+      const canHighlightPage = checkpoint.canHighlight?.page === true;
+      const canHighlightSource = checkpoint.canHighlight?.source === true;
+
+      const newMode = currentHighlightMode === "page" ? "source" : "page";
+
+      if (newMode === "source" && !canHighlightSource) {
+        showNotification(
+          __(
+            "Source view not available for this checkpoint.",
+            "dqm-wordpress-plugin"
+          )
+        );
+        return;
+      }
+      if (newMode === "page" && !canHighlightPage) {
+        showNotification(
+          __(
+            "Page view not available for this checkpoint.",
+            "dqm-wordpress-plugin"
+          )
+        );
+        return;
+      }
+
+      clearHighlights(true);
+      currentHighlightMode = newMode;
+      updateToggleButtonText();
+      performHighlighting(checkpointId, checkpointName, newMode);
+    }
 
     function performHighlighting(checkpointId, checkpointName, mode) {
         const apiKey = CrownpeakDQM.apiKey;
