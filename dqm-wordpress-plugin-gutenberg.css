@@ -17,15 +17,6 @@
   gap: 0!important;
 }
 
-#dqm-topics-loading {
-  display: inline;
-  margin-left: 0.5em;
-}
-
-#dqm-checkpoints-list {
-  margin-top: 1em;
-}
-
 .dqm-checkpoint-group-label {
   font-weight: bold;
   margin: 1em 0 0.5em 0;
@@ -600,7 +591,7 @@
 }
 
 .dqm-spinner {
-  display: inline-block;
+  display: none;
   width: 32px;
   height: 32px;
   border: 4px solid #e1e3e5;
@@ -609,7 +600,298 @@
   animation: dqm-spin 1s linear infinite;
   margin: 20px auto;
 }
+
+.dqm-spinner.show {
+  display: inline-block;
+}
 @keyframes dqm-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+
+
+.dqm-panel {
+  margin: 1em 0;
+  padding: 1em;
+}
+
+#dqm-scan-content-sidebar-btn,
+#dqm-scan-content-after-failed-btn {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+}
+
+#dqm-topics-dropdown {
+  width: 100%;
+}
+
+#dqm-topics-loading {
+  display: inline;
+  margin-left: 0.5em;
+}
+
+#dqm-scan-btn-container {
+  margin-bottom: 1em;
+}
+
+#dqm-scan-result-sidebar {
+  margin-top: 1em;
+  display: none;
+}
+
+#dqm-topics-container {
+  display: none;
+  margin-top: 1em;
+}
+
+#dqm-checkpoint-dialog,
+#dqm-checkpoint-issues-dialog {
+  position: fixed;
+  top: 80px;
+  right: 140px;
+  z-index: 9999;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  border-radius: 8px;
+  padding: 1.5em 2em 1.5em 1.5em;
+  min-width: 340px;
+  max-width: 420px;
+  max-height: 70vh;
+  overflow-y: auto;
+  transition: opacity 0.2s;
+  opacity: 1;
+  display: block;
+}
+
+#dqm-checkpoint-issues-dialog {
+  top: 100px;
+}
+
+.dqm-dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+}
+
+.dqm-dialog-title {
+  font-weight: bold;
+  font-size: 1.15em;
+  margin-bottom: 0.5em;
+}
+
+.dqm-dialog-desc {
+  font-size: 1em;
+  color: #333;
+  margin-bottom: 0.75em;
+}
+
+.dqm-dialog-topics {
+  font-size: 0.95em;
+  color: #888;
+}
+
+.checkpoint-item {
+  cursor: pointer;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.checkpoint-item:hover {
+  background-color: #f5f5f5;
+}
+
+.checkpoint-item.dqm-active {
+  background-color: #e2c6f7;
+}
+
+.checkpoint-item.dqm-active:hover {
+  background-color:#f3e6fa;
+}
+
+.checkpoint-icon-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.checkpoint-icon-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkpoint-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.checkpoint-badges {
+  display: flex;
+  margin-top: 4px;
+}
+
+.checkpoint-highlight-info {
+  color: #36b37e;
+  font-size: 0.95em;
+  margin-top: 0.25em;
+}
+
+.checkpoint-no-highlight {
+  color: #ff5630;
+  font-size: 0.95em;
+  margin-top: 0.25em;
+}
+
+.checkpoint-item:not([style*="cursor: pointer"]) {
+  background-color: #f8f9fa;
+}
+
+.checkpoint-item:not([style*="cursor: pointer"]):hover {
+  background-color: #f8f9fa;
+}
+
+.chart-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.legend-color.passed {
+  background: #b604d4;
+}
+
+.legend-color.failed {
+  background: #303747;
+}
+
+.dqm-breakdown-item {
+  margin-bottom: 10px;
+}
+
+.dqm-breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.dqm-breakdown-bar {
+  background: #e1e3e5;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.dqm-breakdown-progress {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.dqm-no-failures {
+  padding: 10px;
+  text-align: center;
+  color: #666;
+}
+
+.dqm-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 4px;
+    z-index: 10000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.dqm-notification.error {
+    background: #dc3545;
+}
+
+.dqm-notification.success {
+    background: #28a745;
+}
+
+.dqm-notification.fadeout {
+    opacity: 0;
+}
+
+.dqm-preview-subtitle {
+    color: #666;
+    margin-bottom: 16px;
+}
+
+.dqm-preview-content-wrapper {
+    background: #f8f9fa;
+    border-left: 4px solid #ffc107;
+    padding: 16px;
+    border-radius: 4px;
+    margin-top: 12px;
+}
+
+.dqm-preview-content-divider {
+    margin: 16px 0;
+    border: none;
+    border-top: 1px solid #dee2e6;
+}
+
+.dqm-preview-issue-header {
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #495057;
+}
+
+.dqm-preview-code-block {
+    font-family: monospace;
+    background: white;
+    padding: 8px;
+    border-radius: 3px;
+    border: 1px solid #e9ecef;
+}
+
+.dqm-preview-no-content {
+    color: #6c757d;
+    font-style: italic;
+}
+
+
+#dqm-highlight-toggle-btn {
+  position: fixed;
+  top: 60px;
+  left: 20px;
+  z-index: 10001;
+  background: #b604d4;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  transition: background 0.2s ease;
+}
+
+#dqm-highlight-toggle-btn:hover {
+  background: #000000;
+}
+
+#dqm-highlight-toggle-btn:active {
+  transform: translateY(1px);
+}
+
+#dqm-highlight-toggle-btn:focus {
+  outline: 2px solid rgba(182, 4, 212, 0.3);
+  outline-offset: 2px;
 }

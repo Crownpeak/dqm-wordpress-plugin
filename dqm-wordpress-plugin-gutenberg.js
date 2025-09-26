@@ -1,10 +1,436 @@
 (function addDqmCmsButton() {
+    let checkpointsList = null;
+    let allCheckpoints = [];
+    let allTopics = new Set();
+    let checkpointStatusMap = {};
+    let lastAssetId = null;
+    let currentHighlightMode = 'page';
+    let toggleButton = null;
+    let currentCheckpointForToggle = null;
+
     const __ = window.wp && wp.i18n && wp.i18n.__ ? wp.i18n.__ : function (s) { return s; };
     const TABLIST_SELECTOR = 'div[role="tablist"][aria-orientation="horizontal"]';
     const BUTTON_ID = 'dqm-cms-tab';
     const BUTTON_LABEL = __('Crownpeak DQM', 'dqm-wordpress-plugin');
     const PANEL_ID = 'dqm-cms-panel';
 
+    function injectHighlightCSS() {
+        return;
+    }
+    function getEditorIframe() {
+        const iframeSelectors = [
+            'iframe[name="editor-canvas"]',
+            'iframe.editor-canvas__iframe',
+            'iframe[name="editor-canvas"]',
+            '.block-editor-iframe__body iframe',
+            '.edit-post-visual-editor iframe'
+        ];
+
+        for (const selector of iframeSelectors) {
+            const iframe = document.querySelector(selector);
+            if (iframe && iframe.contentDocument) {
+                return iframe;
+            }
+        }
+        return null;
+    }
+
+    function getEditorDocument() {
+        const iframe = getEditorIframe();
+        return iframe ? iframe.contentDocument : document;
+    }
+
+    function normalizeText(text) {
+        return text
+            .trim()
+            .replace(/&#8217;/g, "'")
+            .replace(/&#8220;|&#8221;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/\s+/g, ' ');
+    }
+
+    let currentHighlightedCheckpointId = null;
+
+    function showNotification(message, type = 'error') {
+        const notification = document.createElement('div');
+        notification.className = `dqm-notification ${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 5000);
+    }
+
+    function showPreviewContentDialog(checkpointId, checkpointName, highlightedHtml) {
+    const parser = new DOMParser();
+    const apiDoc = parser.parseFromString(highlightedHtml, "text/html");
+        const highlightedElements = apiDoc.querySelectorAll('[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]');
+
+    let contentHtml =
+        '<p class="dqm-preview-subtitle">' +
+        __(
+        "This issue was found in the preview content so not visible in editor page. The highlighted text below shows where the problem occurs:",
+        "dqm-wordpress-plugin"
+        ) +
+        "</p>";
+
+    if (highlightedElements.length > 0) {
+        contentHtml += '<div class="dqm-preview-content-wrapper">';
+        highlightedElements.forEach((element, index) => {
+        if (index > 0) {
+            contentHtml += '<hr class="dqm-preview-content-divider">';
+        }
+        contentHtml += `<div class="dqm-preview-issue-header">Issue ${
+            index + 1
+        }:</div>`;
+        contentHtml += `<div class="dqm-preview-code-block">${element.outerHTML}</div>`;
+        });
+            contentHtml += '</div>';
+    } else {
+        contentHtml +=
+        '<div class="dqm-preview-no-content">' +
+        __("No highlighted content could be extracted.", "dqm-wordpress-plugin") +
+        "</div>";
+    }
+
+    const cp = {
+            name: checkpointName + ' - ' + __('Found in Preview', 'dqm-wordpress-plugin'),
+        description: contentHtml,
+        topics: ["Preview Content"],
+    };
+
+    showCheckpointDialog(cp);
+    }
+
+    function highlightIssue(checkpointId, checkpointName) {
+      if (currentHighlightedCheckpointId === checkpointId) {
+        clearHighlights();
+        currentHighlightedCheckpointId = null;
+        currentCheckpointForToggle = null;
+        updateCheckpointActiveState(null);
+        if (checkpointDialog && checkpointDialog.style.display !== "none") {
+          checkpointDialog.style.display = "none";
+        }
+        return;
+      }
+
+      clearHighlights();
+      currentHighlightedCheckpointId = checkpointId;
+      currentCheckpointForToggle = checkpointId;
+      updateCheckpointActiveState(checkpointId);
+
+      if (!lastAssetId) {
+        showNotification(
+          __(
+            "Please run a quality check first to enable highlighting.",
+            "dqm-wordpress-plugin"
+          )
+        );
+        currentHighlightedCheckpointId = null;
+        currentCheckpointForToggle = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
+
+      const checkpoint = allCheckpoints.find((cp) => cp.id === checkpointId);
+      if (!checkpoint || !checkpoint.canHighlight) {
+        showNotification(
+          __("Cannot highlight this checkpoint.", "dqm-wordpress-plugin")
+        );
+        currentHighlightedCheckpointId = null;
+        currentCheckpointForToggle = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
+
+      const canHighlightPage = checkpoint.canHighlight.page === true;
+      const canHighlightSource = checkpoint.canHighlight.source === true;
+
+      if (!canHighlightPage && !canHighlightSource) {
+        showNotification(
+          __("Cannot highlight this checkpoint.", "dqm-wordpress-plugin")
+        );
+        currentHighlightedCheckpointId = null;
+        currentCheckpointForToggle = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
+
+      if (canHighlightPage && canHighlightSource) {
+        showToggleButton(checkpointId, checkpointName);
+      }
+
+      currentHighlightMode = canHighlightPage ? "page" : "source";
+      performHighlighting(checkpointId, checkpointName, currentHighlightMode);
+    }
+
+    function showToggleButton(checkpointId, checkpointName) {
+    if (!toggleButton) {
+            toggleButton = document.createElement('button');
+            toggleButton.id = 'dqm-highlight-toggle-btn';
+            toggleButton.className = 'dqm-highlight-toggle';
+
+        toggleButton.addEventListener('click', () => {
+        toggleHighlightMode(checkpointId, checkpointName);
+        });
+
+                document.body.appendChild(toggleButton);
+    }
+
+    updateToggleButtonText();
+        toggleButton.style.display = 'block';
+    }
+
+    function hideToggleButton() {
+    if (toggleButton) {
+            toggleButton.style.display = 'none';
+    }
+    }
+
+
+    function updateToggleButtonText() {
+        if (toggleButton) {
+            const buttonText = currentHighlightMode === 'page' ? 
+                __('Source', 'dqm-wordpress-plugin') : 
+                __('Browser', 'dqm-wordpress-plugin');
+            toggleButton.textContent = buttonText;
+        }
+    }
+
+    function toggleHighlightMode(checkpointId, checkpointName) {
+      const checkpoint = allCheckpoints.find((cp) => cp.id === checkpointId);
+      if (!checkpoint) return;
+
+      const canHighlightPage = checkpoint.canHighlight?.page === true;
+      const canHighlightSource = checkpoint.canHighlight?.source === true;
+
+      const newMode = currentHighlightMode === "page" ? "source" : "page";
+
+      if (newMode === "source" && !canHighlightSource) {
+        showNotification(
+          __(
+            "Source view not available for this checkpoint.",
+            "dqm-wordpress-plugin"
+          )
+        );
+        return;
+      }
+      if (newMode === "page" && !canHighlightPage) {
+        showNotification(
+          __(
+            "Page view not available for this checkpoint.",
+            "dqm-wordpress-plugin"
+          )
+        );
+        return;
+      }
+
+      clearHighlights(true);
+      currentHighlightMode = newMode;
+      updateToggleButtonText();
+      performHighlighting(checkpointId, checkpointName, newMode);
+    }
+
+    function performHighlighting(checkpointId, checkpointName, mode) {
+        const apiKey = CrownpeakDQM.apiKey;
+        
+        if (mode === 'page') {
+            const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
+            fetch(url, {
+                headers: {
+                    "x-api-key": apiKey,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            })
+            .then((resp) => resp.text())
+            .then((htmlContent) => {
+                const foundInEditor = extractAndApplyHighlighting(htmlContent);
+                if (!foundInEditor) {
+                    showPreviewContentDialog(checkpointId, checkpointName, htmlContent);
+                }
+            })
+            .catch((e) => {
+                console.warn("[DQM] Failed to fetch page issue details:", e);
+                showNotification(
+                    __("Failed to load page details: ", "dqm-wordpress-plugin") + e.message
+                );
+            });
+        } else if (mode === 'source') {
+            showSourceInEditor(checkpointId);
+        }
+    }
+
+    function showSourceInEditor(checkpointId) {
+        const apiKey = CrownpeakDQM.apiKey;
+        const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}&highlightSource=true`;
+        
+        fetch(url, {
+            headers: {
+                'x-api-key': apiKey
+            }
+        })
+        .then((resp) => resp.text())
+        .then((sourceHtml) => {
+            replaceEditorWithSource(sourceHtml);
+        })
+        .catch((e) => {
+            console.warn("[DQM] Failed to fetch source highlighting:", e);
+            showNotification(__('Failed to load source details: ', 'dqm-wordpress-plugin') + e.message);
+            currentHighlightedCheckpointId = null;
+            currentCheckpointForToggle = null;
+            updateCheckpointActiveState(null);
+        });
+    }
+
+    function replaceEditorWithSource(sourceHtml) {
+      const iframe = getEditorIframe();
+      if (!iframe || !iframe.contentDocument) {
+        showNotification(__('Cannot access editor content.', 'dqm-wordpress-plugin'));
+        currentHighlightedCheckpointId = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
+
+      const editorDoc = iframe.contentDocument;
+      const editorBody = editorDoc.body;
+
+      if (!editorBody) {
+        showNotification(__('Cannot access editor body.', 'dqm-wordpress-plugin'));
+        currentHighlightedCheckpointId = null;
+        updateCheckpointActiveState(null);
+        return;
+      }
+      if (!editorBody.hasAttribute('data-dqm-original-content')) {
+        editorBody.setAttribute('data-dqm-original-content', editorBody.innerHTML);
+      }
+      editorBody.innerHTML = sourceHtml;
+        editorBody.setAttribute('data-dqm-source-view', 'true');
+      setTimeout(() => {
+            const firstError = editorBody.querySelector('.errorIcon i, [style*="background:yellow"]');
+        if (firstError) {
+          firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+      }, 100);
+    }
+
+    function clearHighlights(preserveToggleButton = false) {
+    const contexts = [document, getEditorDocument()];
+    
+    contexts.forEach(context => {
+        context.querySelectorAll('[data-dqm-highlighted="true"]').forEach(element => {
+            const originalStyle = element.getAttribute('data-original-style') || '';
+            element.setAttribute('style', originalStyle);
+            element.removeAttribute('data-dqm-highlighted');
+            element.removeAttribute('data-original-style');
+        });
+        
+        if (context.body && context.body.hasAttribute('data-dqm-source-view')) {
+            const originalContent = context.body.getAttribute('data-dqm-original-content');
+            if (originalContent) {
+                context.body.innerHTML = originalContent;
+            }
+            context.body.removeAttribute('data-dqm-original-content');
+            context.body.removeAttribute('data-dqm-source-view');
+        }
+    });
+    
+    if (!preserveToggleButton) {
+        currentHighlightedCheckpointId = null;
+        hideToggleButton();
+    }
+}
+
+    function extractAndApplyHighlighting(apiResponseHtml) {
+        const parser = new DOMParser();
+        const apiDoc = parser.parseFromString(apiResponseHtml, "text/html");
+        const editorDoc = getEditorDocument();
+        const highlightedElements = apiDoc.querySelectorAll(
+            '[style*="background:yellow"], [style*="background-color:yellow"], [style*="background: yellow"]'
+        );
+
+        if (highlightedElements.length === 0) {
+            console.warn("[DQM] No highlighted elements found in API response");
+            return false;
+        }
+        let foundInEditor = false;
+
+        highlightedElements.forEach((apiElement, index) => {
+            const apiText = normalizeText(
+                apiElement.textContent || apiElement.innerText || ""
+            );
+            const apiTagName = apiElement.tagName.toLowerCase();
+
+            const editorElements = editorDoc.querySelectorAll(apiTagName);
+
+            for (const editorElement of editorElements) {
+                const editorText = normalizeText(
+                    editorElement.textContent || editorElement.innerText || ""
+                );
+
+                if (apiText === editorText) {
+                    applyApiHighlighting(editorElement, apiElement, index);
+                    foundInEditor = true;
+                    break;
+                }
+            }
+        });
+        return foundInEditor;
+    }
+
+    function applyApiHighlighting(editorElement, apiElement, index) {
+        if (!editorElement || !apiElement) {
+            console.warn('[DQM] applyApiHighlighting called with null element', { index });
+            return;
+        }
+
+        if (!editorElement.hasAttribute('data-original-style')) {
+            editorElement.setAttribute('data-original-style', editorElement.style.cssText || '');
+        }
+        
+        const apiStyle = apiElement.getAttribute('style') || '';
+        editorElement.setAttribute('style', apiStyle);
+        
+        editorElement.setAttribute('data-dqm-highlighted', 'true');
+        if (index === 0) {
+            editorElement.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+                inline: 'nearest'
+            });
+        }
+    }
+
+    function updateCheckpointActiveState(activeCheckpointId) {
+        document.querySelectorAll('.checkpoint-item').forEach(item => {
+            item.classList.remove('dqm-active');
+        });
+
+        if (activeCheckpointId) {
+            const activeItem = document.querySelector(`[data-checkpoint-id="${activeCheckpointId}"]`);
+            if (activeItem) {
+                activeItem.classList.add('dqm-active');
+            }
+        }
+    }
+    function waitForIframe(callback) {
+        const iframe = getEditorIframe();
+        if (!iframe) {
+            setTimeout(() => waitForIframe(callback), 100);
+            return;
+        }
+
+        if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+            callback();
+        } else {
+            iframe.addEventListener('load', callback);
+        }
+    }
+
+    waitForIframe(() => {
+        injectHighlightCSS();
+        injectButton();
+        handleTabSwitch();
+    });
     function showDqmPanel(show) {
         let panel = document.getElementById(PANEL_ID);
         if (!panel && show) {
@@ -19,20 +445,15 @@
             const scanBtn = document.createElement('button');
             scanBtn.id = 'dqm-scan-content-sidebar-btn';
             scanBtn.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
-            scanBtn.style.display = 'block';
-            scanBtn.style.width = '100%';
             scanBtn.className = 'primary-button';
             const topicsDiv = document.createElement('div');
-            topicsDiv.style.marginTop = '1em';
+            topicsDiv.className = 'dqm-topics-container';
             const topicsLabel = document.createElement('label');
             topicsLabel.textContent = __('All Topics:', 'dqm-wordpress-plugin');
             topicsLabel.setAttribute('for', 'dqm-topics-dropdown');
-            topicsLabel.style.display = 'block';
-            topicsLabel.style.marginBottom = '0.25em';
             topicsLabel.className = 'dqm-topics-label';
             const topicsDropdown = document.createElement('select');
             topicsDropdown.id = 'dqm-topics-dropdown';
-            topicsDropdown.style.width = '100%';
             const defaultOption = document.createElement('option');
             defaultOption.value = 'all';
             defaultOption.textContent = __('All Topics', 'dqm-wordpress-plugin');
@@ -40,9 +461,6 @@
             const topicsLoading = document.createElement('span');
             topicsLoading.id = 'dqm-topics-loading';
             topicsLoading.textContent = __('Loading...', 'dqm-wordpress-plugin');
-            topicsLoading.style.display = 'inline';
-            topicsLoading.style.marginLeft = '0.5em';
-            topicsLoading.className = '';
             topicsDiv.appendChild(topicsLabel);
             topicsDiv.appendChild(topicsDropdown);
             topicsDiv.appendChild(topicsLoading);
@@ -51,17 +469,12 @@
             const failedHeader = document.createElement('h3');
             failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + __('Failed Checkpoints', 'dqm-wordpress-plugin');
             failedCheckpointsCard.appendChild(failedHeader);
-            
-            const checkpointsList = document.createElement('div');
+
+            checkpointsList = document.createElement('div');
             checkpointsList.id = 'dqm-checkpoints-list';
             checkpointsList.className = '';
             failedCheckpointsCard.appendChild(checkpointsList);
-
-            let allCheckpoints = [];
-            let allTopics = new Set();
-            let checkpointStatusMap = {};
-            let lastAssetId = null;
-
+            injectHighlightCSS();
             function renderCheckpointsList(selectedTopic) {
                 checkpointsList.innerHTML = '';
                 let filtered = selectedTopic === 'all'
@@ -77,42 +490,47 @@
 
                 if (failedCount === 0) {
                     const noFailuresMsg = document.createElement('div');
-                    noFailuresMsg.style.padding = '10px';
-                    noFailuresMsg.style.textAlign = 'center';
-                    noFailuresMsg.style.color = '#666';
-                    noFailuresMsg.textContent = selectedTopic === 'all' 
+                    noFailuresMsg.className = 'dqm-no-failures';
+                    noFailuresMsg.textContent = selectedTopic === 'all'
                         ? __('No failed checkpoints found!', 'dqm-wordpress-plugin')
                         : __('No failed checkpoints found for this topic.', 'dqm-wordpress-plugin');
                     card.appendChild(noFailuresMsg);
                 } else {
                     const ul = document.createElement('ul');
                     ul.className = 'checkpoint-list';
-                    
                     failed.forEach(cp => {
                         const li = document.createElement('li');
                         li.className = 'checkpoint-item';
+                        li.setAttribute('data-checkpoint-id', cp.id);
+
+                        const canHighlightPage = cp.canHighlight && cp.canHighlight.page === true;
+                        const canHighlightSource = cp.canHighlight && cp.canHighlight.source === true;
+                        const canHighlightAny = canHighlightPage || canHighlightSource;
+
+                        if (canHighlightAny) {
+                            li.addEventListener('click', function (e) {
+                                e.stopPropagation();
+                                highlightIssue(cp.id, cp.name);
+                            });
+                            li.style.cursor = 'pointer';
+                        } else {
+                            li.style.cursor = 'default';
+                        }
+
                         const iconTitleDiv = document.createElement('div');
                         iconTitleDiv.className = 'checkpoint-icon-title';
 
                         const iconTitleRow = document.createElement('div');
                         iconTitleRow.className = 'checkpoint-icon-title-row';
-                        iconTitleRow.style.display = 'flex';
-                        iconTitleRow.style.alignItems = 'center';
-                        iconTitleRow.style.gap = '8px';
                         const iconDiv = document.createElement('div');
                         iconDiv.className = 'checkpoint-icon failed';
                         iconDiv.textContent = '!';
-                        iconDiv.style.cursor = 'pointer';
+                        iconDiv.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            showCheckpointDialog(cp);
+                        });
                         iconDiv.addEventListener('mouseenter', function (e) {
-                            showCheckpointDialog({
-                                name: cp.name,
-                                description: cp.description || '',
-                                topics: []
-                            });
-                            if (checkpointDialog) {
-                                const topicsDiv = checkpointDialog.querySelector('.dqm-modal-topics');
-                                if (topicsDiv) topicsDiv.style.display = 'none';
-                            }
+                            showCheckpointDialog(cp);
                         });
                         iconDiv.addEventListener('mouseleave', function (e) {
                             if (checkpointDialog) {
@@ -121,18 +539,16 @@
                         });
                         iconTitleRow.appendChild(iconDiv);
                         const contentDiv = document.createElement('div');
-                        contentDiv.style.display = 'flex';
-                        contentDiv.style.flexDirection = 'column';
-                        contentDiv.style.alignItems = 'flex-start';
+                        contentDiv.className = 'checkpoint-content';
                         const nameSpan = document.createElement('span');
                         nameSpan.textContent = cp.name;
-                        nameSpan.className = 'checkpoint-title';
+                        nameSpan.className = 'checkpoint-title checkpoint-label';
                         contentDiv.appendChild(nameSpan);
+
+                        let badgesAdded = false;
                         if (Array.isArray(cp.topics) && cp.topics.length > 0) {
                             const badgesDiv = document.createElement('div');
                             badgesDiv.className = 'checkpoint-badges';
-                            badgesDiv.style.display = 'flex';
-                            badgesDiv.style.marginTop = '4px';
                             cp.topics.slice().sort((a, b) => {
                                 if (!a) return -1;
                                 if (!b) return 1;
@@ -144,6 +560,18 @@
                                 badgesDiv.appendChild(badge);
                             });
                             contentDiv.appendChild(badgesDiv);
+                            badgesAdded = true;
+                        }
+                        if (cp.canHighlight && !canHighlightAny) {
+                            const cannotHighlight = document.createElement('div');
+                            cannotHighlight.className = 'checkpoint-no-highlight';
+                            cannotHighlight.textContent = __('Cannot highlight', 'dqm-wordpress-plugin');
+                            contentDiv.appendChild(cannotHighlight);
+                        } else if (canHighlightAny) {
+                            const canHighlight = document.createElement('div');
+                            canHighlight.className = 'checkpoint-highlight-info';
+                            canHighlight.textContent = __('Click to highlight', 'dqm-wordpress-plugin');
+                            contentDiv.appendChild(canHighlight);
                         }
 
                         iconTitleRow.appendChild(contentDiv);
@@ -157,6 +585,8 @@
 
                 checkpointsList.appendChild(card);
             }
+
+            injectHighlightCSS();
 
             fetch(ajaxurl + '?action=crownpeakDqmGetCheckpoints', { credentials: 'same-origin' })
                 .then(response => response.json())
@@ -203,14 +633,9 @@
 
             const resultDiv = document.createElement('div');
             resultDiv.id = 'dqm-scan-result-sidebar';
-            resultDiv.style.marginTop = '1em';
-            resultDiv.style.display = 'none';
-            resultDiv.className = '';
 
             const topicsContainer = document.createElement('div');
             topicsContainer.id = 'dqm-topics-container';
-            topicsContainer.style.display = 'none';
-            topicsContainer.className = '';
             topicsContainer.appendChild(topicsDiv);
             topicsContainer.appendChild(failedCheckpointsCard);
             function renderScoreCard(passedCount, totalCount) {
@@ -258,13 +683,13 @@
                             html += `<hr class="dqm-breakdown-divider">`;
                         }
                         html += `
-                            <div style="margin-bottom: 10px;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <div class="dqm-breakdown-item">
+                                <div class="dqm-breakdown-header">
                                     <span class="${badgeClass}" style="background:${color}">${topic}</span>
                                     <span>${passed}/${total} ${__('passed', 'dqm-wordpress-plugin')}</span>
                                 </div>
-                                <div style="background: #e1e3e5; height: 8px; border-radius: 4px;">
-                                    <div style="background: ${color}; width: ${percent}%; height: 100%; border-radius: 4px;"></div>
+                                <div class="dqm-breakdown-bar">
+                                    <div class="dqm-breakdown-progress" style="background: ${color}; width: ${percent}%;"></div>
                                 </div>
                             </div>
                         `;
@@ -313,8 +738,13 @@
                     const data = await resp.json();
                     checkpointStatusMap = {};
                     if (data && data.checkpoints && Array.isArray(data.checkpoints)) {
+                        allCheckpoints = data.checkpoints;
+                        allTopics = new Set();
                         data.checkpoints.forEach(cp => {
                             checkpointStatusMap[cp.id] = !!cp.failed;
+                            if (Array.isArray(cp.topics)) {
+                                cp.topics.forEach(t => allTopics.add(t));
+                            }
                         });
                         const total = data.checkpoints.length;
                         const passed = data.checkpoints.filter(cp => !cp.failed).length;
@@ -373,15 +803,11 @@
             const scanBtnAfterFailed = document.createElement('button');
             scanBtnAfterFailed.id = 'dqm-scan-content-after-failed-btn';
             scanBtnAfterFailed.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
-            scanBtnAfterFailed.style.display = 'block';
-            scanBtnAfterFailed.style.width = '100%';
             scanBtnAfterFailed.className = 'primary-button';
-            scanBtnAfterFailed.style.marginTop = '5px';
             topicsContainer.appendChild(scanBtnAfterFailed);
             const spinner = document.createElement('div');
             spinner.id = 'dqm-loading-spinner';
             spinner.className = 'dqm-spinner';
-            spinner.style.display = 'none';
             scanBtnContainer.appendChild(spinner);
 
             panel.appendChild(scanBtnContainer);
@@ -407,7 +833,7 @@
                 spinner.style.display = 'block';
                 let postId = null;
                 let previewUrl = null;
-                
+
                 if (window.wp && wp.data) {
                     try {
                         postId = wp.data.select('core/editor').getCurrentPostId();
@@ -419,7 +845,7 @@
                         console.warn('Error getting post info:', e);
                     }
                 }
-                
+
                 if (!previewUrl) {
                     spinner.style.display = 'none';
                     resultDiv.style.display = 'block';
@@ -428,7 +854,7 @@
                     button.disabled = false;
                     return;
                 }
-                
+
                 let html = '';
                 try {
                     const previewResponse = await fetch(previewUrl, {
@@ -437,13 +863,13 @@
                             'Cache-Control': 'no-cache'
                         }
                     });
-                    
+
                     if (!previewResponse.ok) {
                         throw new Error(`Preview fetch failed: ${previewResponse.status} ${previewResponse.statusText}`);
                     }
-                    
+
                     html = await previewResponse.text();
-                    
+
                     if (!html.trim()) {
                         throw new Error('Preview content is empty');
                     }
@@ -569,7 +995,7 @@
             });
             dqmButton.setAttribute('aria-selected', 'true');
             dqmButton.classList.add('is-active');
-            updateTabIndicatorPosition(dqmButton, tablist);      
+            updateTabIndicatorPosition(dqmButton, tablist);
             document.querySelectorAll('.editor-sidebar > div.components-panel').forEach(panel => {
                 panel.classList.remove('is-opened', 'is-active');
                 if (panel.id !== PANEL_ID) {
@@ -627,33 +1053,12 @@
             checkpointDialog.setAttribute('role', 'dialog');
             checkpointDialog.setAttribute('aria-modal', 'true');
             checkpointDialog.setAttribute('tabindex', '-1');
-            checkpointDialog.style.position = 'fixed';
-            checkpointDialog.style.top = '80px';
-            checkpointDialog.style.right = '140px';
-            checkpointDialog.style.zIndex = '9999';
-            checkpointDialog.style.background = '#fff';
-            checkpointDialog.style.boxShadow = '0 4px 24px rgba(0,0,0,0.18)';
-            checkpointDialog.style.borderRadius = '8px';
-            checkpointDialog.style.padding = '1.5em 2em 1.5em 1.5em';
-            checkpointDialog.style.minWidth = '340px';
-            checkpointDialog.style.maxWidth = '420px';
-            checkpointDialog.style.maxHeight = '70vh';
-            checkpointDialog.style.overflowY = 'auto';
-            checkpointDialog.style.transition = 'opacity 0.2s';
-            checkpointDialog.style.opacity = '1';
-            checkpointDialog.style.display = 'block';
             document.body.appendChild(checkpointDialog);
         }
         checkpointDialog.innerHTML = '';
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '×';
-        closeBtn.style.position = 'absolute';
-        closeBtn.style.top = '10px';
-        closeBtn.style.right = '18px';
-        closeBtn.style.background = 'none';
-        closeBtn.style.border = 'none';
-        closeBtn.style.fontSize = '1.5em';
-        closeBtn.style.cursor = 'pointer';
+        closeBtn.className = 'dqm-dialog-close';
         closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
         closeBtn.onclick = () => {
             checkpointDialog.style.display = 'none';
@@ -663,34 +1068,25 @@
         };
         checkpointDialog.appendChild(closeBtn);
         const name = document.createElement('div');
-        name.style.fontWeight = 'bold';
-        name.style.fontSize = '1.15em';
-        name.style.marginBottom = '0.5em';
+        name.className = 'dqm-dialog-title';
         name.textContent = cp.name;
-        name.className = 'dqm-modal-title';
         checkpointDialog.appendChild(name);
         if (cp.description) {
             const desc = document.createElement('div');
-            desc.style.fontSize = '1em';
-            desc.style.color = '#333';
-            desc.style.marginBottom = '0.75em';
+            desc.className = 'dqm-dialog-desc';
             desc.innerHTML = cp.description;
-            desc.className = 'dqm-modal-desc';
             checkpointDialog.appendChild(desc);
         }
         if (Array.isArray(cp.topics) && cp.topics.length > 0) {
             const topics = document.createElement('div');
-            topics.style.fontSize = '0.95em';
-            topics.style.color = '#888';
+            topics.className = 'dqm-dialog-topics';
             topics.textContent = __('Topics: ', 'dqm-wordpress-plugin') + cp.topics.join(', ');
-            topics.className = 'dqm-modal-topics';
             checkpointDialog.appendChild(topics);
         }
         checkpointDialog.style.display = 'block';
-        checkpointDialog.style.opacity = '1';
         checkpointDialog._lastActiveElement = document.activeElement;
         closeBtn.focus();
-        checkpointDialog.addEventListener('keydown', function(e) {
+        checkpointDialog.addEventListener('keydown', function (e) {
             if (e.key === 'Tab') {
                 e.preventDefault();
                 closeBtn.focus();
@@ -711,97 +1107,4 @@
     });
 
     let checkpointIssuesDialog = null;
-    function showCheckpointIssuesDialog(assetId, checkpointId, checkpointName) {
-        if (!checkpointIssuesDialog) {
-            checkpointIssuesDialog = document.createElement('div');
-            checkpointIssuesDialog.id = 'dqm-checkpoint-issues-dialog';
-            checkpointIssuesDialog.setAttribute('role', 'dialog');
-            checkpointIssuesDialog.setAttribute('aria-modal', 'true');
-            checkpointIssuesDialog.setAttribute('tabindex', '-1');
-            checkpointIssuesDialog.style.position = 'fixed';
-            checkpointIssuesDialog.style.top = '100px';
-            checkpointIssuesDialog.style.right = '140px';
-            checkpointIssuesDialog.style.zIndex = '9999';
-            checkpointIssuesDialog.style.background = '#fff';
-            checkpointIssuesDialog.style.boxShadow = '0 4px 24px rgba(0,0,0,0.18)';
-            checkpointIssuesDialog.style.borderRadius = '8px';
-            checkpointIssuesDialog.style.padding = '1.5em 2em 1.5em 1.5em';
-            checkpointIssuesDialog.style.minWidth = '340px';
-            checkpointIssuesDialog.style.maxWidth = '420px';
-            checkpointIssuesDialog.style.maxHeight = '70vh';
-            checkpointIssuesDialog.style.overflowY = 'auto';
-            checkpointIssuesDialog.style.transition = 'opacity 0.2s';
-            checkpointIssuesDialog.style.opacity = '1';
-            checkpointIssuesDialog.style.display = 'block';
-            document.body.appendChild(checkpointIssuesDialog);
-        }
-        checkpointIssuesDialog.innerHTML = '';
-        const closeBtn = document.createElement('button');
-        closeBtn.textContent = '×';
-        closeBtn.style.position = 'absolute';
-        closeBtn.style.top = '10px';
-        closeBtn.style.right = '18px';
-        closeBtn.style.background = 'none';
-        closeBtn.style.border = 'none';
-        closeBtn.style.fontSize = '1.5em';
-        closeBtn.style.cursor = 'pointer';
-        closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
-        closeBtn.onclick = () => {
-            checkpointIssuesDialog.style.display = 'none';
-            if (checkpointIssuesDialog._lastActiveElement) {
-                checkpointIssuesDialog._lastActiveElement.focus();
-            }
-        };
-        checkpointIssuesDialog.appendChild(closeBtn);
-        const name = document.createElement('div');
-        name.style.fontWeight = 'bold';
-        name.style.fontSize = '1.15em';
-        name.style.marginBottom = '0.5em';
-        name.textContent = checkpointName + ' - ' + __('Issues', 'dqm-wordpress-plugin');
-        name.className = 'dqm-modal-title';
-        checkpointIssuesDialog.appendChild(name);
-        const contentDiv = document.createElement('div');
-        contentDiv.textContent = __('Loading issues...', 'dqm-wordpress-plugin');
-        checkpointIssuesDialog.appendChild(contentDiv);
-        const apiKey = CrownpeakDQM.apiKey;
-        const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${assetId}/errors/${checkpointId}?apiKey=${apiKey}`;
-        fetch(url, {
-            headers: {
-                'x-api-key': apiKey,
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-        })
-            .then(resp => resp.json())
-            .then(data => {
-                let html = '';
-                if (data && data.statusCode && data.message) {
-                    html = `<div>${data.message}</div>`;
-                } else if (data && Array.isArray(data.issues) && data.issues.length > 0) {
-                    html += '<ul>';
-                    data.issues.forEach(issue => {
-                        html += `<li>${issue.message || JSON.stringify(issue)}</li>`;
-                    });
-                    html += '</ul>';
-                } else {
-                    html += '<div>' + __('No issues found for this checkpoint.', 'dqm-wordpress-plugin') + '</div>';
-                }
-                contentDiv.innerHTML = html;
-            })
-            .catch(e => {
-                contentDiv.innerHTML = '<div>' + __('Failed to load issues: ', 'dqm-wordpress-plugin') + e.message + '</div>';
-            });
-        checkpointIssuesDialog.style.display = 'block';
-        checkpointIssuesDialog.style.opacity = '1';
-        checkpointIssuesDialog._lastActiveElement = document.activeElement;
-        closeBtn.focus();
-        checkpointIssuesDialog.addEventListener('keydown', function(e) {
-            if (e.key === 'Tab') {
-                e.preventDefault();
-                closeBtn.focus();
-            }
-            if (e.key === 'Escape') {
-                closeBtn.click();
-            }
-        });
-    }
 })();
