@@ -14,6 +14,120 @@
     const BUTTON_LABEL = __('Crownpeak DQM', 'dqm-wordpress-plugin');
     const PANEL_ID = 'dqm-cms-panel';
 
+    const SUPPORTED_LOCALES = ['en', 'de', 'es'];
+    const DEFAULT_LOCALE = 'en';
+    const LOCALE_STORAGE_KEY = 'dqm_locale';
+    
+    const translations = {
+        en: {
+            language: 'Language',
+            language_en: 'English',
+            language_de: 'German',
+            language_es: 'Spanish',
+            reset: 'Reset',
+            source_user: 'Custom selected',
+            source_navigator: 'Browser setting',
+            source_default: 'Default language'
+        },
+        de: {
+            language: 'Sprache',
+            language_en: 'Englisch',
+            language_de: 'Deutsch',
+            language_es: 'Spanisch',
+            reset: 'Zurücksetzen',
+            source_user: 'Durch Benutzer ausgewählt',
+            source_navigator: 'Browser-Einstellung',
+            source_default: 'Standard-Sprache'
+        },
+        es: {
+            language: 'Idioma',
+            language_en: 'Inglés',
+            language_de: 'Alemán',
+            language_es: 'Español',
+            reset: 'Restablecer',
+            source_user: 'Seleccionado manualmente',
+            source_navigator: 'Configuración del navegador',
+            source_default: 'Idioma predeterminado'
+        }
+    };
+
+    let currentLocale = DEFAULT_LOCALE;
+    let localeSource = 'default';
+    let userOverride = false;
+
+    function normalizeLocale(input) {
+        if (!input) return null;
+        const lower = input.toLowerCase();
+        const candidate = lower.split('-')[0];
+        return SUPPORTED_LOCALES.includes(candidate) ? candidate : null;
+    }
+
+    function loadSavedLocale() {
+        try {
+            return localStorage.getItem(LOCALE_STORAGE_KEY);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function persistLocale(locale) {
+        try {
+            if (locale) {
+                localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+            } else {
+                localStorage.removeItem(LOCALE_STORAGE_KEY);
+            }
+        } catch (e) {
+            console.warn('Failed to persist locale:', e);
+        }
+    }
+
+    function resolveLocale() {
+        const params = new URLSearchParams(window.location.search);
+        const urlLocale = normalizeLocale(params.get('dqmUiLang'));
+        if (urlLocale) {
+            localeSource = 'url';
+            userOverride = false;
+            return urlLocale;
+        }
+
+        const savedLocale = normalizeLocale(loadSavedLocale());
+        if (savedLocale) {
+            localeSource = 'user';
+            userOverride = true;
+            return savedLocale;
+        }
+
+        const navigatorLocale = normalizeLocale(navigator.language);
+        if (navigatorLocale) {
+            localeSource = 'navigator';
+            userOverride = false;
+            return navigatorLocale;
+        }
+
+        localeSource = 'default';
+        userOverride = false;
+        return DEFAULT_LOCALE;
+    }
+
+    function t(key, locale = currentLocale) {
+        const normalizedLocale = normalizeLocale(locale);
+        
+        if (window.DQM_I18N && window.DQM_I18N[normalizedLocale] && window.DQM_I18N[normalizedLocale][key]) {
+            return window.DQM_I18N[normalizedLocale][key];
+        }
+        if (translations[normalizedLocale] && translations[normalizedLocale][key]) {
+            return translations[normalizedLocale][key];
+        }
+        return key;
+    }
+
+    currentLocale = resolveLocale();
+
+    const translateText = function(text) {
+        return __(text, 'dqm-wordpress-plugin');
+    };
+
     function injectHighlightCSS() {
         return;
     }
@@ -446,6 +560,9 @@
             scanBtn.id = 'dqm-scan-content-sidebar-btn';
             scanBtn.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
             scanBtn.className = 'primary-button';
+            const languageSwitcher = createLanguageSwitcher();
+            panel.appendChild(languageSwitcher);
+
             const topicsDiv = document.createElement('div');
             topicsDiv.className = 'dqm-topics-container';
             const topicsLabel = document.createElement('label');
@@ -467,7 +584,7 @@
             const failedCheckpointsCard = document.createElement('div');
             failedCheckpointsCard.className = 'card';
             const failedHeader = document.createElement('h3');
-            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + __('Failed Checkpoints', 'dqm-wordpress-plugin');
+            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + t('Failed Checkpoints');
             failedCheckpointsCard.appendChild(failedHeader);
 
             checkpointsList = document.createElement('div');
@@ -492,8 +609,8 @@
                     const noFailuresMsg = document.createElement('div');
                     noFailuresMsg.className = 'dqm-no-failures';
                     noFailuresMsg.textContent = selectedTopic === 'all'
-                        ? __('No failed checkpoints found!', 'dqm-wordpress-plugin')
-                        : __('No failed checkpoints found for this topic.', 'dqm-wordpress-plugin');
+                        ? t('No failed checkpoints found!')
+                        : t('No failed checkpoints found for this topic.');
                     card.appendChild(noFailuresMsg);
                 } else {
                     const ul = document.createElement('ul');
@@ -643,7 +760,7 @@
                 let html = `
                     
                     <div class="card">
-                        <h3>📊 Quality Overview</h3>
+                        <h3>📊 ${t('Quality Overview')}</h3>
                         <div class="chart-container">
                             <div class="pie-chart"></div>
                             <div class="legend">
@@ -670,7 +787,7 @@
                         'Usability': '#36b37e',
                     };
                     html += `<div class="card">
-                        <h3>📈 ${__('Quality Breakdown', 'dqm-wordpress-plugin')}</h3>`;
+                        <h3>📈 ${t('Quality Breakdown')}</h3>`;
                     Array.from(allTopics).sort().forEach((topicRaw, idx, arr) => {
                         const topic = (topicRaw || '').trim();
                         const checkpoints = allCheckpoints.filter(cp => Array.isArray(cp.topics) && cp.topics.map(t => (t || '').trim()).includes(topic));
@@ -1046,6 +1163,230 @@
     handleTabSwitch();
 
     let checkpointDialog = null;
+
+    function createLanguageSwitcher() {
+        const container = document.createElement('div');
+        container.className = 'dqm-language-switcher';
+        container.style.cssText = 'position: relative; margin: 16px 0;';
+
+        const button = document.createElement('button');
+        button.className = 'dqm-language-button';
+        button.setAttribute('aria-label', t('language'));
+        button.disabled = localeSource === 'url';
+        
+        button.innerHTML = '<svg class="dqm-translate-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>';
+        
+        const menu = document.createElement('div');
+        menu.className = 'dqm-language-menu';
+        menu.style.display = 'none';
+        
+        const flagSvg = {
+            en: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="14"><rect width="22" height="14" fill="#fff"/><g stroke-width="0"><rect y="0" width="22" height="2" fill="#b22234"/><rect y="3" width="22" height="2" fill="#b22234"/><rect y="6" width="22" height="2" fill="#b22234"/><rect y="9" width="22" height="2" fill="#b22234"/><rect y="12" width="22" height="2" fill="#b22234"/><rect width="10" height="8" fill="#3c3b6e"/></g></svg>',
+            de: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="14"><rect width="22" height="14" fill="#ffce00"/><rect y="0" width="22" height="4.67" fill="#000"/><rect y="9.33" width="22" height="4.67" fill="#dd0000"/></svg>',
+            es: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="14"><rect width="22" height="14" fill="#c60b1e"/><rect y="4" width="22" height="6" fill="#ffc400"/></svg>'
+        };
+        
+        SUPPORTED_LOCALES.forEach(function(locale) {
+            const menuItem = document.createElement('div');
+            menuItem.className = 'dqm-language-menu-item';
+            if (locale === currentLocale) {
+                menuItem.classList.add('active');
+            }
+            
+            const flagContainer = document.createElement('div');
+            flagContainer.className = 'dqm-flag-container';
+            flagContainer.innerHTML = flagSvg[locale];
+            
+            const labelContainer = document.createElement('div');
+            labelContainer.className = 'dqm-language-label';
+            
+            const labelRow = document.createElement('div');
+            labelRow.className = 'dqm-language-label-row';
+            
+            const label = document.createElement('span');
+            label.textContent = t('language_' + locale);
+            
+            const code = document.createElement('span');
+            code.className = 'dqm-language-code';
+            code.textContent = locale.toUpperCase();
+            
+            labelRow.appendChild(label);
+            labelRow.appendChild(code);
+            labelContainer.appendChild(labelRow);
+            
+            if (locale === currentLocale) {
+                const sourceLabel = document.createElement('div');
+                sourceLabel.className = 'dqm-language-source';
+                sourceLabel.textContent = t('source_' + localeSource);
+                if (localeSource === 'url') {
+                    sourceLabel.style.color = '#d63301';
+                }
+                labelContainer.appendChild(sourceLabel);
+            }
+            
+            menuItem.appendChild(flagContainer);
+            menuItem.appendChild(labelContainer);
+            
+            menuItem.addEventListener('click', function() {
+                if (locale !== currentLocale && localeSource !== 'url') {
+                    changeLanguage(locale);
+                    menu.style.display = 'none';
+                }
+            });
+            
+            menu.appendChild(menuItem);
+        });
+        
+        const divider = document.createElement('div');
+        divider.className = 'dqm-menu-divider';
+        menu.appendChild(divider);
+        
+        const resetItem = document.createElement('div');
+        resetItem.className = 'dqm-language-menu-item dqm-reset-item';
+        resetItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
+        const resetText = document.createElement('span');
+        resetText.textContent = t('reset');
+        resetItem.appendChild(resetText);
+        
+        resetItem.addEventListener('click', function() {
+            if (localeSource !== 'url' && userOverride) {
+                resetLanguage();
+                menu.style.display = 'none';
+            }
+        });
+        
+        if (!userOverride || localeSource === 'url') {
+            resetItem.style.opacity = '0.5';
+            resetItem.style.cursor = 'not-allowed';
+        }
+        
+        menu.appendChild(resetItem);
+        
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+        });
+        
+        document.addEventListener('click', function(e) {
+            if (!container.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        });
+        
+        container.appendChild(button);
+        container.appendChild(menu);
+        
+        return container;
+    }
+
+    function changeLanguage(newLocale) {
+        if (!SUPPORTED_LOCALES.includes(newLocale)) return;
+        
+        currentLocale = newLocale;
+        localeSource = 'user';
+        userOverride = true;
+        persistLocale(newLocale);
+        
+        if (window.wp && wp.i18n && wp.i18n.setLocaleData) {
+            try {
+                const localeMap = { en: 'en_US', de: 'de_DE', es: 'es_ES' };
+                const wpLocale = localeMap[newLocale] || 'en_US';
+                console.log('Switching to locale:', wpLocale);
+            } catch (e) {
+                console.warn('Could not update WordPress locale:', e);
+            }
+        }
+        
+        updateUITranslations();
+        
+        const existingSwitcher = document.querySelector('.dqm-language-switcher');
+        if (existingSwitcher) {
+            const newSwitcher = createLanguageSwitcher();
+            existingSwitcher.replaceWith(newSwitcher);
+        }
+    }
+
+    function resetLanguage() {
+        persistLocale(null);
+        currentLocale = resolveLocale();
+        updateUITranslations();
+        
+        const existingSwitcher = document.querySelector('.dqm-language-switcher');
+        if (existingSwitcher) {
+            const newSwitcher = createLanguageSwitcher();
+            existingSwitcher.replaceWith(newSwitcher);
+        }
+    }
+
+    function updateUITranslations() {
+        const currentTranslations = (window.DQM_I18N && window.DQM_I18N[currentLocale]) || window.DQM_I18N.en;
+
+        const scanButtons = document.querySelectorAll('#dqm-scan-content-sidebar-btn, #dqm-scan-content-after-failed-btn');
+        scanButtons.forEach(function(btn) {
+            if (btn) btn.textContent = currentTranslations['Run Quality Check'];
+        });
+        
+        const topicsLabel = document.querySelector('.dqm-topics-label');
+        if (topicsLabel) {
+            topicsLabel.textContent = currentTranslations['Filter by Topic:'];
+        }
+
+        const topicsDropdown = document.getElementById('dqm-topics-dropdown');
+        if (topicsDropdown) {
+            const firstOption = topicsDropdown.querySelector('option[value="all"]');
+            if (firstOption) {
+                firstOption.textContent = currentTranslations['All Topics'];
+            }
+        }
+
+        if (toggleButton && toggleButton.style.display !== 'none') {
+            const buttonText = currentHighlightMode === 'page' ? 
+                currentTranslations['Source'] : 
+                currentTranslations['Browser'];
+            toggleButton.textContent = buttonText;
+        }
+
+        const scoreCardHeadings = document.querySelectorAll('#dqm-score-card-container h3');
+        scoreCardHeadings.forEach(function(heading) {
+            if (heading.textContent.includes('Quality Overview') || heading.textContent.includes('Qualitätsübersicht') || heading.textContent.includes('Resumen de calidad')) {
+                heading.textContent = '📊 ' + currentTranslations['Quality Overview'];
+            }
+            if (heading.textContent.includes('Quality Breakdown') || heading.textContent.includes('Qualitätsaufschlüsselung') || heading.textContent.includes('Desglose de calidad')) {
+                heading.textContent = '📈 ' + currentTranslations['Quality Breakdown'];
+            }
+        });
+
+        const passedSpans = document.querySelectorAll('.dqm-breakdown-header span:last-child');
+        passedSpans.forEach(function(span) {
+            const text = span.textContent;
+            const match = text.match(/(\d+)\/(\d+)\s+(.+)/);
+            if (match) {
+                span.textContent = match[1] + '/' + match[2] + ' ' + currentTranslations['passed'];
+            }
+        });
+
+        document.querySelectorAll('.checkpoint-no-highlight').forEach(function(el) {
+            el.textContent = currentTranslations['Cannot highlight'];
+        });
+        
+        document.querySelectorAll('.checkpoint-highlight-info').forEach(function(el) {
+            el.textContent = currentTranslations['Click to highlight'];
+        });
+        
+        const failedHeaders = document.querySelectorAll('.card h3');
+        failedHeaders.forEach(function(heading) {
+            const icon = heading.querySelector('i.fa-triangle-exclamation');
+            if (icon) {
+                heading.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + currentTranslations['Failed Checkpoints'];
+            }
+        });
+        
+        const dropdown = document.getElementById('dqm-topics-dropdown');
+        if (dropdown && typeof renderCheckpointsList === 'function') {
+            renderCheckpointsList(dropdown.value);
+        }
+    }
+
     function showCheckpointDialog(cp) {
         if (!checkpointDialog) {
             checkpointDialog = document.createElement('div');
@@ -1060,7 +1401,7 @@
         closeBtn.textContent = '×';
         closeBtn.className = 'dqm-dialog-close';
         closeBtn.setAttribute('aria-label', __('Close', 'dqm-wordpress-plugin'));
-        closeBtn.onclick = () => {
+        closeBtn.onclick = function() {
             checkpointDialog.style.display = 'none';
             if (checkpointDialog._lastActiveElement) {
                 checkpointDialog._lastActiveElement.focus();
@@ -1101,7 +1442,7 @@
             if (!checkpointDialog.contains(e.target) && !checkpointsList.contains(e.target)) {
                 checkpointDialog.style.display = 'none';
                 const radios = checkpointsList.querySelectorAll('input[type="radio"]');
-                radios.forEach(r => r.checked = false);
+                radios.forEach(function(r) { r.checked = false; });
             }
         }
     });

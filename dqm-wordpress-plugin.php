@@ -140,9 +140,17 @@ class DQMWordPressPlugin
     public function enqueue_gutenberg_assets()
     {
         wp_enqueue_script(
+            'dqm-wordpress-plugin-i18n',
+            CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-i18n.js',
+            array(),
+            CROWNPEAK_DQM_VERSION,
+            true
+        );
+        
+        wp_enqueue_script(
             'dqm-wordpress-plugin-gutenberg',
             CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-gutenberg.js',
-            array('wp-element', 'wp-edit-post', 'wp-plugins', 'wp-components', 'wp-data', 'wp-i18n'),
+            array('wp-element', 'wp-edit-post', 'wp-plugins', 'wp-components', 'wp-data', 'wp-i18n', 'dqm-wordpress-plugin-i18n'),
             CROWNPEAK_DQM_VERSION,
             true
         );
