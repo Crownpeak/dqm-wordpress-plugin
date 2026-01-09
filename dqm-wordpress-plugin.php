@@ -35,6 +35,7 @@ class DQMWordPressPlugin
         add_action('wp_ajax_crownpeakDqmGetCheckpoints', 'crownpeakDqmGetCheckpointsHandler');
         add_action('wp_ajax_crownpeak_dqm_spellcheck', 'crownpeak_dqm_spellcheck_handler');
         add_action('wp_ajax_nopriv_crownpeak_dqm_spellcheck', 'crownpeak_dqm_spellcheck_handler');
+        add_action('wp_ajax_crownpeak_dqm_ai_summary', 'crownpeak_dqm_ai_summary_handler');
     }
 
     public function init()
@@ -76,6 +77,9 @@ class DQMWordPressPlugin
     {
         register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_api_key');
         register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_website_id');
+        register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_openai_api_key');
+        register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_openai_model');
+        register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_ai_summary_enabled');
     }
 
     public function admin_page()
@@ -132,6 +136,69 @@ class DQMWordPressPlugin
                         </div>
                     </form>
                 </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <h3><?php _e('AI Assistant Configuration', 'dqm-wordpress-plugin'); ?></h3>
+                    <p style="color:#666;margin-bottom:16px;">
+                        <?php _e('Enable AI-powered summaries of quality check results using OpenAI.', 'dqm-wordpress-plugin'); ?>
+                    </p>
+
+                    <form method="post" action="options.php">
+                        <?php settings_fields('crownpeak_dqm_settings'); ?>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input
+                                    type="checkbox"
+                                    name="crownpeak_dqm_ai_summary_enabled"
+                                    value="1"
+                                    <?php checked(get_option('crownpeak_dqm_ai_summary_enabled', '0'), '1'); ?> />
+                                <?php _e('Enable AI Summary', 'dqm-wordpress-plugin'); ?>
+                            </label>
+                            <div class="form-help">
+                                <?php _e('Generate AI-powered bullet-point summaries of the most critical quality issues.', 'dqm-wordpress-plugin'); ?>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="crownpeak_dqm_openai_api_key">
+                                <?php _e('OpenAI API Key', 'dqm-wordpress-plugin'); ?>
+                            </label>
+                            <input
+                                type="password"
+                                id="crownpeak_dqm_openai_api_key"
+                                name="crownpeak_dqm_openai_api_key"
+                                value="<?php echo esc_attr(get_option('crownpeak_dqm_openai_api_key', '')); ?>"
+                                class="form-input"
+                                placeholder="<?php _e('Enter your OpenAI API key (sk-...)', 'dqm-wordpress-plugin'); ?>" />
+                            <div class="form-help">
+                                <?php _e('Your OpenAI API key is required for AI features. Get one at https://platform.openai.com/api-keys', 'dqm-wordpress-plugin'); ?>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="crownpeak_dqm_openai_model">
+                                <?php _e('OpenAI Model', 'dqm-wordpress-plugin'); ?>
+                            </label>
+                            <select
+                                id="crownpeak_dqm_openai_model"
+                                name="crownpeak_dqm_openai_model"
+                                class="form-input">
+                                <option value="gpt-4o-mini" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4o-mini'); ?>>gpt-4o-mini (Recommended)</option>
+                                <option value="gpt-4o" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4o'); ?>>gpt-4o</option>
+                                <option value="gpt-4-turbo" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4-turbo'); ?>>gpt-4-turbo</option>
+                                <option value="gpt-3.5-turbo" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-3.5-turbo'); ?>>gpt-3.5-turbo</option>
+                            </select>
+                            <div class="form-help">
+                                <?php _e('Choose the OpenAI model for AI summary generation. gpt-4o-mini offers the best balance of cost and quality.', 'dqm-wordpress-plugin'); ?>
+                            </div>
+                        </div>
+
+                        <div class="submit">
+                            <?php submit_button(__('Save AI Settings', 'dqm-wordpress-plugin'), 'primary', 'submit', false); ?>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 <?php
@@ -158,6 +225,9 @@ class DQMWordPressPlugin
         wp_localize_script('dqm-wordpress-plugin-gutenberg', 'CrownpeakDQM', array(
             'ajaxurl' => admin_url('admin-ajax.php'),
             'apiKey' => get_option('crownpeak_dqm_api_key', ''),
+            'openaiApiKey' => get_option('crownpeak_dqm_openai_api_key', ''),
+            'openaiModel' => get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'),
+            'aiSummaryEnabled' => get_option('crownpeak_dqm_ai_summary_enabled', '0'),
             'websiteId' => get_option('crownpeak_dqm_website_id', ''),
         ));
         wp_enqueue_style(
@@ -372,5 +442,146 @@ function crownpeak_dqm_spellcheck_handler()
     $body = wp_remote_retrieve_body($response);
     $data = json_decode($body, true);
     wp_send_json(['success' => true, 'data' => $data]);
+    wp_die();
+}
+
+function crownpeak_dqm_ai_summary_handler()
+{
+    $openai_api_key = get_option('crownpeak_dqm_openai_api_key', '');
+    $openai_model = get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini');
+    $asset_id = isset($_POST['assetId']) ? sanitize_text_field($_POST['assetId']) : '';
+    $checkpoints_json = isset($_POST['checkpoints']) ? $_POST['checkpoints'] : '';
+    $target_lang = isset($_POST['targetLang']) ? sanitize_text_field($_POST['targetLang']) : 'en';
+    
+    if (empty($openai_api_key) || !is_string($openai_api_key) || strlen($openai_api_key) < 10) {
+        wp_send_json(['success' => false, 'message' => 'OpenAI API key is missing or invalid.']);
+        wp_die();
+    }
+    
+    if (empty($asset_id) || !preg_match('/^[a-zA-Z0-9\-_]+$/', $asset_id)) {
+        wp_send_json(['success' => false, 'message' => 'No valid assetId provided.']);
+        wp_die();
+    }
+    
+    if (empty($checkpoints_json)) {
+        wp_send_json(['success' => false, 'message' => 'No checkpoints data provided.']);
+        wp_die();
+    }
+    
+    $checkpoints = json_decode(stripslashes($checkpoints_json), true);
+    if (!is_array($checkpoints)) {
+        wp_send_json(['success' => false, 'message' => 'Invalid checkpoints data format.']);
+        wp_die();
+    }
+    
+    // Filter failed checkpoints
+    $failed_checkpoints = array_filter($checkpoints, function($cp) {
+        return isset($cp['failed']) && $cp['failed'] === true;
+    });
+    
+    if (empty($failed_checkpoints)) {
+        wp_send_json(['success' => false, 'message' => 'No failed checkpoints to summarize.']);
+        wp_die();
+    }
+    
+    // Build prompt for OpenAI
+    $checkpoint_details = [];
+    foreach ($failed_checkpoints as $cp) {
+        $checkpoint_details[] = sprintf(
+            "- %s: %s",
+            $cp['name'] ?? 'Unknown',
+            $cp['description'] ?? 'No description'
+        );
+    }
+    
+    $checkpoint_list = implode("\n", $checkpoint_details);
+    $total_failed = count($failed_checkpoints);
+    
+    $system_prompt = "You are a quality assurance expert analyzing web page quality issues. Provide a concise summary of the most critical issues in 3-7 bullet points. Focus on actionable insights and prioritize by severity.";
+    
+    $lang_instructions = [
+        'de' => 'Provide the summary in German.',
+        'es' => 'Provide the summary in Spanish.',
+        'en' => 'Provide the summary in English.'
+    ];
+    
+    $lang_instruction = isset($lang_instructions[$target_lang]) ? $lang_instructions[$target_lang] : $lang_instructions['en'];
+    
+    $user_prompt = sprintf(
+        "Analyze these %d failed quality checkpoints and provide a concise summary:\n\n%s\n\n%s Return only the bullet points without introduction.",
+        $total_failed,
+        $checkpoint_list,
+        $lang_instruction
+    );
+    
+    // Call OpenAI API
+    $endpoint = 'https://api.openai.com/v1/chat/completions';
+    $args = [
+        'method' => 'POST',
+        'headers' => [
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer ' . $openai_api_key,
+        ],
+        'body' => json_encode([
+            'model' => $openai_model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.7,
+            'max_tokens' => 500,
+        ]),
+        'timeout' => 60,
+    ];
+    
+    $response = wp_remote_post($endpoint, $args);
+    
+    if (is_wp_error($response)) {
+        wp_send_json(['success' => false, 'message' => 'OpenAI API request failed: ' . $response->get_error_message()]);
+        wp_die();
+    }
+    
+    $status_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body, true);
+    
+    if ($status_code !== 200) {
+        $error_message = isset($data['error']['message']) ? $data['error']['message'] : 'Unknown error';
+        wp_send_json(['success' => false, 'message' => 'OpenAI API error: ' . $error_message]);
+        wp_die();
+    }
+    
+    if (!isset($data['choices'][0]['message']['content'])) {
+        wp_send_json(['success' => false, 'message' => 'Invalid response from OpenAI API.']);
+        wp_die();
+    }
+    
+    $summary = trim($data['choices'][0]['message']['content']);
+    
+    // Parse bullet points
+    $bullets = [];
+    $lines = explode("\n", $summary);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        // Remove common bullet markers
+        $line = preg_replace('/^[-*•]\s*/', '', $line);
+        if (!empty($line)) {
+            $bullets[] = $line;
+        }
+    }
+    
+    $stats = [
+        'totalCheckpoints' => count($checkpoints),
+        'failedCheckpoints' => $total_failed,
+        'model' => $openai_model,
+    ];
+    
+    wp_send_json([
+        'success' => true,
+        'bullets' => $bullets,
+        'stats' => $stats,
+        'cached' => false
+    ]);
     wp_die();
 }

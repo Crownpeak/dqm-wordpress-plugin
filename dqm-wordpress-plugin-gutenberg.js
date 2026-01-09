@@ -7,6 +7,7 @@
     let currentHighlightMode = 'page';
     let toggleButton = null;
     let currentCheckpointForToggle = null;
+    let aiSummaryCache = {};
 
     const __ = window.wp && wp.i18n && wp.i18n.__ ? wp.i18n.__ : function (s) { return s; };
     const TABLIST_SELECTOR = 'div[role="tablist"][aria-orientation="horizontal"]';
@@ -545,6 +546,300 @@
         injectButton();
         handleTabSwitch();
     });
+
+    function generateAISummary(assetId, checkpoints, targetLang = currentLocale) {
+        const container = document.getElementById('dqm-ai-summary-container');
+        if (!container) return;
+        
+        const aiEnabled = CrownpeakDQM.aiSummaryEnabled === '1';
+        const hasOpenAIKey = CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10;
+        
+        if (!aiEnabled || !hasOpenAIKey) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        const cacheKey = `${assetId}:${targetLang}`;
+        if (aiSummaryCache[cacheKey]) {
+            renderAISummary(aiSummaryCache[cacheKey], false);
+            return;
+        }
+        
+        container.style.display = 'block';
+        container.innerHTML = `
+            <div class="card dqm-ai-summary-card">
+                <div class="dqm-ai-summary-header">
+                    <h3>
+                        <i class="fa-solid fa-sparkles" style="color:#6554C0;margin-right:8px;"></i>
+                        ${t('AI Summary')}
+                        <span class="dqm-ai-badge">ChatGPT</span>
+                    </h3>
+                    <button class="dqm-ai-settings-btn" id="dqm-ai-settings-btn" title="${t('AI Settings')}">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+                <div class="dqm-ai-loading">
+                    <div class="dqm-spinner"></div>
+                    <p>${t('Generating AI summary...')}</p>
+                </div>
+            </div>
+        `;
+        
+        const settingsBtn = document.getElementById('dqm-ai-settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', showAISettingsDialog);
+        }
+        
+        const params = new URLSearchParams({
+            action: 'crownpeak_dqm_ai_summary',
+            assetId: assetId,
+            checkpoints: JSON.stringify(checkpoints),
+            targetLang: targetLang
+        });
+        
+        fetch(CrownpeakDQM.ajaxurl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                aiSummaryCache[cacheKey] = data;
+                renderAISummary(data, true);
+            } else {
+                renderAISummaryError(data.message || __('Failed to generate AI summary', 'dqm-wordpress-plugin'));
+            }
+        })
+        .catch(error => {
+            renderAISummaryError(__('Network error: ', 'dqm-wordpress-plugin') + error.message);
+        });
+    }
+    
+    function renderAISummary(data, isNew) {
+        const container = document.getElementById('dqm-ai-summary-container');
+        if (!container) return;
+        
+        const bullets = data.bullets || [];
+        const stats = data.stats || {};
+        
+        let bulletsHTML = '';
+        bullets.forEach((bullet, index) => {
+            bulletsHTML += `<li class="dqm-ai-bullet" style="animation-delay: ${index * 0.1}s">${bullet}</li>`;
+        });
+        
+        container.innerHTML = `
+            <div class="card dqm-ai-summary-card">
+                <div class="dqm-ai-summary-header">
+                    <h3>
+                        <i class="fa-solid fa-sparkles" style="color:#6554C0;margin-right:8px;"></i>
+                        ${t('AI Summary')}
+                        <span class="dqm-ai-badge">ChatGPT</span>
+                    </h3>
+                    <button class="dqm-ai-settings-btn" id="dqm-ai-settings-btn" title="${t('AI Settings')}">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+                ${bullets.length > 0 ? `
+                    <ul class="dqm-ai-bullets">
+                        ${bulletsHTML}
+                    </ul>
+                ` : '<p>' + t('No critical issues to summarize') + '</p>'}
+                <div class="dqm-ai-footer">
+                    <span class="dqm-ai-model-info">
+                        <i class="fa-solid fa-robot"></i> ${stats.model || 'gpt-4o-mini'}
+                    </span>
+                    ${data.cached ? '<span class="dqm-ai-cached">' + t('Cached') + '</span>' : ''}
+                    <button class="dqm-ai-regenerate-btn" id="dqm-ai-regenerate-btn">
+                        <i class="fa-solid fa-arrows-rotate"></i> ${t('Regenerate')}
+                    </button>
+                </div>
+                <p class="dqm-ai-disclaimer">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:#FF8B00;"></i>
+                    ${t('AI-generated summary may contain errors. Please verify.')}
+                </p>
+            </div>
+        `;
+        
+        const settingsBtn = document.getElementById('dqm-ai-settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', showAISettingsDialog);
+        }
+        
+        const regenerateBtn = document.getElementById('dqm-ai-regenerate-btn');
+        if (regenerateBtn) {
+            regenerateBtn.addEventListener('click', () => {
+                // Clear cache and regenerate
+                const cacheKey = `${lastAssetId}:${currentLocale}`;
+                delete aiSummaryCache[cacheKey];
+                generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+            });
+        }
+    }
+    
+    function renderAISummaryError(errorMessage) {
+        const container = document.getElementById('dqm-ai-summary-container');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="card dqm-ai-summary-card dqm-ai-error">
+                <div class="dqm-ai-summary-header">
+                    <h3>
+                        <i class="fa-solid fa-sparkles" style="color:#6554C0;margin-right:8px;"></i>
+                        ${t('AI Summary')}
+                        <span class="dqm-ai-badge">ChatGPT</span>
+                    </h3>
+                    <button class="dqm-ai-settings-btn" id="dqm-ai-settings-btn" title="${t('AI Settings')}">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+                <div class="dqm-ai-error-content">
+                    <i class="fa-solid fa-circle-exclamation" style="color:#DE350B;font-size:24px;margin-bottom:8px;"></i>
+                    <p><strong>${t('Failed to generate summary')}</strong></p>
+                    <p style="color:#666;font-size:14px;">${errorMessage}</p>
+                    <button class="dqm-ai-retry-btn" id="dqm-ai-retry-btn">
+                        <i class="fa-solid fa-arrows-rotate"></i> ${t('Retry')}
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        const settingsBtn = document.getElementById('dqm-ai-settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', showAISettingsDialog);
+        }
+        
+        const retryBtn = document.getElementById('dqm-ai-retry-btn');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', () => {
+                generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+            });
+        }
+    }
+    
+    function showAISettingsDialog() {
+        const dialogHTML = `
+            <div class="dqm-ai-settings-dialog" id="dqm-ai-settings-dialog">
+                <div class="dqm-ai-settings-content">
+                    <div class="dqm-ai-settings-header">
+                        <h2>
+                            <i class="fa-solid fa-gear"></i>
+                            ${t('AI Assistant Settings')}
+                        </h2>
+                        <button class="dqm-dialog-close" id="dqm-ai-settings-close">×</button>
+                    </div>
+                    <div class="dqm-ai-settings-body">
+                        <div class="dqm-ai-info-box">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <p>${t('AI summary uses ChatGPT to generate concise bullet-point summaries of quality issues.')}</p>
+                        </div>
+                        
+                        <div class="dqm-ai-setting-item">
+                            <div class="dqm-ai-setting-label">
+                                <strong>${t('Status')}</strong>
+                            </div>
+                            <div class="dqm-ai-setting-value">
+                                ${CrownpeakDQM.aiSummaryEnabled === '1' ? 
+                                    '<span class="dqm-status-enabled"><i class="fa-solid fa-circle-check"></i> ' + t('Enabled') + '</span>' :
+                                    '<span class="dqm-status-disabled"><i class="fa-solid fa-circle-xmark"></i> ' + t('Disabled') + '</span>'
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="dqm-ai-setting-item">
+                            <div class="dqm-ai-setting-label">
+                                <strong>${t('OpenAI Model')}</strong>
+                            </div>
+                            <div class="dqm-ai-setting-value">
+                                ${CrownpeakDQM.openaiModel || 'gpt-4o-mini'}
+                            </div>
+                        </div>
+                        
+                        <div class="dqm-ai-setting-item">
+                            <div class="dqm-ai-setting-label">
+                                <strong>${t('API Key Status')}</strong>
+                            </div>
+                            <div class="dqm-ai-setting-value">
+                                ${CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10 ?
+                                    '<span class="dqm-status-enabled"><i class="fa-solid fa-key"></i> ' + t('Configured') + '</span>' :
+                                    '<span class="dqm-status-disabled"><i class="fa-solid fa-triangle-exclamation"></i> ' + t('Not configured') + '</span>'
+                                }
+                            </div>
+                        </div>
+                        
+                        <div class="dqm-ai-setting-item">
+                            <div class="dqm-ai-setting-label">
+                                <strong>${t('Cache')}</strong>
+                            </div>
+                            <div class="dqm-ai-setting-value">
+                                ${Object.keys(aiSummaryCache).length} ${t('cached summaries')}
+                                <button class="dqm-ai-clear-cache-btn" id="dqm-ai-clear-cache-btn">
+                                    <i class="fa-solid fa-trash"></i> ${t('Clear Cache')}
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="dqm-ai-warning-box">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <p>${t('AI may generate incorrect or misleading information. Always verify results.')}</p>
+                        </div>
+                        
+                        <div class="dqm-ai-settings-footer">
+                            <p style="color:#666;font-size:13px;">
+                                ${t('To change AI settings, visit')} 
+                                <a href="${window.location.origin}/wp-admin/options-general.php?page=dqm-wordpress-plugin" target="_blank">
+                                    ${t('Plugin Settings')} <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const existingDialog = document.getElementById('dqm-ai-settings-dialog');
+        if (existingDialog) {
+            existingDialog.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', dialogHTML);
+        
+        const dialog = document.getElementById('dqm-ai-settings-dialog');
+        const closeBtn = document.getElementById('dqm-ai-settings-close');
+        const clearCacheBtn = document.getElementById('dqm-ai-clear-cache-btn');
+        
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                dialog.remove();
+            });
+        }
+        
+        if (clearCacheBtn) {
+            clearCacheBtn.addEventListener('click', () => {
+                aiSummaryCache = {};
+                clearCacheBtn.innerHTML = '<i class="fa-solid fa-check"></i> ' + t('Cleared!');
+                clearCacheBtn.disabled = true;
+                setTimeout(() => {
+                    clearCacheBtn.innerHTML = '<i class="fa-solid fa-trash"></i> ' + t('Clear Cache');
+                    clearCacheBtn.disabled = false;
+                }, 2000);
+            });
+        }
+        
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) {
+                dialog.remove();
+            }
+        });
+        
+        document.addEventListener('keydown', function escapeHandler(e) {
+            if (e.key === 'Escape') {
+                dialog.remove();
+                document.removeEventListener('keydown', escapeHandler);
+            }
+        });
+    }
+    
     function showDqmPanel(show) {
         let panel = document.getElementById(PANEL_ID);
         if (!panel && show) {
@@ -560,8 +855,36 @@
             scanBtn.id = 'dqm-scan-content-sidebar-btn';
             scanBtn.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
             scanBtn.className = 'primary-button';
+            const headerContainer = document.createElement('div');
+            headerContainer.className = 'dqm-header-container';
+            
+            const headerTitle = document.createElement('div');
+            headerTitle.className = 'dqm-header-title';
+            headerTitle.textContent = 'Digital Quality & Accessibility';
+            headerContainer.appendChild(headerTitle);
+            
             const languageSwitcher = createLanguageSwitcher();
-            panel.appendChild(languageSwitcher);
+            headerContainer.appendChild(languageSwitcher);
+            
+            if (CrownpeakDQM.aiSummaryEnabled) {
+                const aiAssistantBtn = document.createElement('button');
+                aiAssistantBtn.id = 'dqm-ai-assistant-btn';
+                aiAssistantBtn.className = 'dqm-ai-assistant-button';
+                aiAssistantBtn.setAttribute('type', 'button');
+                aiAssistantBtn.setAttribute('aria-label', t('AI Assistant'));
+                aiAssistantBtn.innerHTML = '<svg class="dqm-ai-icon" focusable="false" aria-hidden="true" viewBox="0 0 24 24"><path d="m19 9 1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25z"></path></svg>';
+                aiAssistantBtn.onclick = function() {
+                    showAISettingsDialog();
+                };
+                headerContainer.appendChild(aiAssistantBtn);
+            }
+            
+            panel.appendChild(headerContainer);
+            
+            const aiSummaryContainer = document.createElement('div');
+            aiSummaryContainer.id = 'dqm-ai-summary-container';
+            aiSummaryContainer.style.display = 'none';
+            panel.appendChild(aiSummaryContainer);
 
             const topicsDiv = document.createElement('div');
             topicsDiv.className = 'dqm-topics-container';
@@ -1026,6 +1349,12 @@
                         showTopicsWithCheckpoints();
                         spinner.style.display = 'none';
                         fetchAndRenderSpellcheck(data.assetId);
+                        
+                        // Generate AI Summary if enabled
+                        if (CrownpeakDQM.aiSummaryEnabled === '1') {
+                            generateAISummary(data.assetId, allCheckpoints, currentLocale);
+                        }
+                        
                         resultDiv.style.display = 'none';
                     } else {
                         spinner.style.display = 'none';
