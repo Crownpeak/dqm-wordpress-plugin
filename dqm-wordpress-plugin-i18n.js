@@ -28,7 +28,6 @@
             'Failed Checkpoints': 'Failed Checkpoints',
             'No failed checkpoints found!': 'No failed checkpoints found!',
             'No failed checkpoints found for this topic.': 'No failed checkpoints found for this topic.',
-            // AI Assistant Translations
             'AI Summary': 'AI Summary',
             'AI Settings': 'AI Settings',
             'Generating AI summary...': 'Generating AI summary...',
@@ -82,7 +81,6 @@
             'Failed Checkpoints': 'Fehlgeschlagene Checkpoints',
             'No failed checkpoints found!': 'Keine fehlgeschlagenen Checkpoints gefunden!',
             'No failed checkpoints found for this topic.': 'Keine fehlgeschlagenen Checkpoints für dieses Thema gefunden.',
-            // AI Assistant Translations
             'AI Summary': 'KI-Zusammenfassung',
             'AI Settings': 'KI-Einstellungen',
             'Generating AI summary...': 'Erstelle KI-Zusammenfassung...',
@@ -136,7 +134,6 @@
             'Failed Checkpoints': 'Puntos de control fallidos',
             'No failed checkpoints found!': '¡No se encontraron puntos de control fallidos!',
             'No failed checkpoints found for this topic.': 'No se encontraron puntos de control fallidos para este tema.',
-            // AI Assistant Translations
             'AI Summary': 'Resumen de IA',
             'AI Settings': 'Configuración de IA',
             'Generating AI summary...': 'Generando resumen de IA...',

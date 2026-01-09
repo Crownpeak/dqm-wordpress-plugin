@@ -669,7 +669,6 @@
         const regenerateBtn = document.getElementById('dqm-ai-regenerate-btn');
         if (regenerateBtn) {
             regenerateBtn.addEventListener('click', () => {
-                // Clear cache and regenerate
                 const cacheKey = `${lastAssetId}:${currentLocale}`;
                 delete aiSummaryCache[cacheKey];
                 generateAISummary(lastAssetId, allCheckpoints, currentLocale);
@@ -1350,7 +1349,6 @@
                         spinner.style.display = 'none';
                         fetchAndRenderSpellcheck(data.assetId);
                         
-                        // Generate AI Summary if enabled
                         if (CrownpeakDQM.aiSummaryEnabled === '1') {
                             generateAISummary(data.assetId, allCheckpoints, currentLocale);
                         }

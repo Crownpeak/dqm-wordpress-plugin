@@ -474,7 +474,6 @@ function crownpeak_dqm_ai_summary_handler()
         wp_die();
     }
     
-    // Filter failed checkpoints
     $failed_checkpoints = array_filter($checkpoints, function($cp) {
         return isset($cp['failed']) && $cp['failed'] === true;
     });
@@ -484,7 +483,6 @@ function crownpeak_dqm_ai_summary_handler()
         wp_die();
     }
     
-    // Build prompt for OpenAI
     $checkpoint_details = [];
     foreach ($failed_checkpoints as $cp) {
         $checkpoint_details[] = sprintf(
@@ -514,7 +512,6 @@ function crownpeak_dqm_ai_summary_handler()
         $lang_instruction
     );
     
-    // Call OpenAI API
     $endpoint = 'https://api.openai.com/v1/chat/completions';
     $args = [
         'method' => 'POST',
@@ -558,13 +555,11 @@ function crownpeak_dqm_ai_summary_handler()
     
     $summary = trim($data['choices'][0]['message']['content']);
     
-    // Parse bullet points
     $bullets = [];
     $lines = explode("\n", $summary);
     foreach ($lines as $line) {
         $line = trim($line);
         if (empty($line)) continue;
-        // Remove common bullet markers
         $line = preg_replace('/^[-*•]\s*/', '', $line);
         if (!empty($line)) {
             $bullets[] = $line;
