@@ -98,6 +98,11 @@ class DQMWordPressPlugin
 
                     <form method="post" action="options.php">
                         <?php settings_fields('crownpeak_dqm_settings'); ?>
+                        
+                        <!-- Hidden fields to preserve AI settings when saving CMS configuration -->
+                        <input type="hidden" name="crownpeak_dqm_ai_summary_enabled" value="<?php echo esc_attr(get_option('crownpeak_dqm_ai_summary_enabled', '0')); ?>" />
+                        <input type="hidden" name="crownpeak_dqm_openai_api_key" value="<?php echo esc_attr(get_option('crownpeak_dqm_openai_api_key', '')); ?>" />
+                        <input type="hidden" name="crownpeak_dqm_openai_model" value="<?php echo esc_attr(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini')); ?>" />
 
                         <div class="form-group">
                             <label class="form-label" for="crownpeak_dqm_api_key">
@@ -145,6 +150,10 @@ class DQMWordPressPlugin
 
                     <form method="post" action="options.php">
                         <?php settings_fields('crownpeak_dqm_settings'); ?>
+                        
+                        <!-- Hidden fields to preserve CMS configuration when saving AI settings -->
+                        <input type="hidden" name="crownpeak_dqm_api_key" value="<?php echo esc_attr(get_option('crownpeak_dqm_api_key', '')); ?>" />
+                        <input type="hidden" name="crownpeak_dqm_website_id" value="<?php echo esc_attr(get_option('crownpeak_dqm_website_id', '')); ?>" />
 
                         <div class="form-group">
                             <label class="form-label">

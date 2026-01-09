@@ -8,6 +8,8 @@
     let toggleButton = null;
     let currentCheckpointForToggle = null;
     let aiSummaryCache = {};
+    let renderScoreCard = null; // Will be set when panel is created
+    let renderCheckpointsList = null; // Will be set when panel is created
 
     const __ = window.wp && wp.i18n && wp.i18n.__ ? wp.i18n.__ : function (s) { return s; };
     const TABLIST_SELECTOR = 'div[role="tablist"][aria-orientation="horizontal"]';
@@ -111,16 +113,45 @@
         return DEFAULT_LOCALE;
     }
 
-    function t(key, locale = currentLocale) {
-        const normalizedLocale = normalizeLocale(locale);
+    /**
+     * Translation function with interpolation support (similar to i18next)
+     * @param {string} key - Translation key
+     * @param {object} params - Optional parameters for interpolation
+     * @param {string} locale - Optional locale override
+     * @returns {string} Translated string with interpolated values
+     * 
+     * Examples:
+     * t('title') -> "Digital Quality and Accessibility"
+     * t('summary_stats', { attempts: 5, empty: 2, mode: 'fast', duration: 120 })
+     *   -> "AI stats – attempts: 5, empty: 2, mode: fast, duration: 120ms"
+     */
+    function t(key, params = {}, locale = null) {
+        // Handle legacy calls where second parameter is locale string
+        if (typeof params === 'string') {
+            locale = params;
+            params = {};
+        }
         
-        if (window.DQM_I18N && window.DQM_I18N[normalizedLocale] && window.DQM_I18N[normalizedLocale][key]) {
-            return window.DQM_I18N[normalizedLocale][key];
+        const targetLocale = normalizeLocale(locale || currentLocale);
+        let translation = key;
+        
+        // Try to get translation from DQM_I18N first (comprehensive translations)
+        if (window.DQM_I18N && window.DQM_I18N[targetLocale] && window.DQM_I18N[targetLocale][key]) {
+            translation = window.DQM_I18N[targetLocale][key];
         }
-        if (translations[normalizedLocale] && translations[normalizedLocale][key]) {
-            return translations[normalizedLocale][key];
+        // Fallback to local translations
+        else if (translations[targetLocale] && translations[targetLocale][key]) {
+            translation = translations[targetLocale][key];
         }
-        return key;
+        
+        // Support interpolation (replace {{variable}} with values)
+        if (params && typeof params === 'object' && Object.keys(params).length > 0) {
+            translation = translation.replace(/\{\{(\w+)\}\}/g, (match, variable) => {
+                return params[variable] !== undefined ? params[variable] : match;
+            });
+        }
+        
+        return translation;
     }
 
     currentLocale = resolveLocale();
@@ -569,18 +600,20 @@
         container.innerHTML = `
             <div class="card dqm-ai-summary-card">
                 <div class="dqm-ai-summary-header">
-                    <h3>
-                        <i class="fa-solid fa-sparkles" style="color:#6554C0;margin-right:8px;"></i>
-                        ${t('AI Summary')}
-                        <span class="dqm-ai-badge">ChatGPT</span>
-                    </h3>
-                    <button class="dqm-ai-settings-btn" id="dqm-ai-settings-btn" title="${t('AI Settings')}">
+                    <div class="dqm-ai-header-left">
+                        <svg class="dqm-ai-sparkle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                        </svg>
+                        <h3>${t('summary_title')}</h3>
+                        <span class="dqm-ai-badge">${t('ai_backend_api')}</span>
+                    </div>
+                    <button class="dqm-ai-icon-btn" id="dqm-ai-settings-btn" title="${t('ai_settings')}">
                         <i class="fa-solid fa-gear"></i>
                     </button>
                 </div>
                 <div class="dqm-ai-loading">
                     <div class="dqm-spinner"></div>
-                    <p>${t('Generating AI summary...')}</p>
+                    <p>${t('summary_generating')}</p>
                 </div>
             </div>
         `;
@@ -631,33 +664,42 @@
         container.innerHTML = `
             <div class="card dqm-ai-summary-card">
                 <div class="dqm-ai-summary-header">
-                    <h3>
-                        <i class="fa-solid fa-sparkles" style="color:#6554C0;margin-right:8px;"></i>
-                        ${t('AI Summary')}
-                        <span class="dqm-ai-badge">ChatGPT</span>
-                    </h3>
-                    <button class="dqm-ai-settings-btn" id="dqm-ai-settings-btn" title="${t('AI Settings')}">
-                        <i class="fa-solid fa-gear"></i>
-                    </button>
+                    <div class="dqm-ai-header-left">
+                        <svg class="dqm-ai-sparkle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                        </svg>
+                        <h3>${t('summary_title')}</h3>
+                        <span class="dqm-ai-badge">${t('ai_backend_api')}</span>
+                    </div>
+                    <div class="dqm-ai-header-right">
+                        <button class="dqm-ai-icon-btn" id="dqm-ai-settings-btn" title="${t('ai_settings')}">
+                            <i class="fa-solid fa-gear"></i>
+                        </button>
+                        <button class="dqm-ai-icon-btn" id="dqm-ai-regenerate-header-btn" title="${t('summary_regenerate')}">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
+                    </div>
                 </div>
                 ${bullets.length > 0 ? `
                     <ul class="dqm-ai-bullets">
                         ${bulletsHTML}
                     </ul>
-                ` : '<p>' + t('No critical issues to summarize') + '</p>'}
+                ` : '<p class="dqm-ai-empty">' + t('summary_empty') + '</p>'}
                 <div class="dqm-ai-footer">
-                    <span class="dqm-ai-model-info">
-                        <i class="fa-solid fa-robot"></i> ${stats.model || 'gpt-4o-mini'}
-                    </span>
-                    ${data.cached ? '<span class="dqm-ai-cached">' + t('Cached') + '</span>' : ''}
+                    <div class="dqm-ai-footer-left">
+                        <span class="dqm-ai-model-info">
+                            <i class="fa-solid fa-robot"></i> ${stats.model || 'gpt-4o-mini'}
+                        </span>
+                        ${data.cached ? '<span class="dqm-ai-cached-badge">' + t('ai_cache_badge') + '</span>' : ''}
+                    </div>
                     <button class="dqm-ai-regenerate-btn" id="dqm-ai-regenerate-btn">
-                        <i class="fa-solid fa-arrows-rotate"></i> ${t('Regenerate')}
+                        <i class="fa-solid fa-arrows-rotate"></i> ${t('summary_regenerate')}
                     </button>
                 </div>
-                <p class="dqm-ai-disclaimer">
-                    <i class="fa-solid fa-triangle-exclamation" style="color:#FF8B00;"></i>
-                    ${t('AI-generated summary may contain errors. Please verify.')}
-                </p>
+                <div class="dqm-ai-disclaimer">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>${t('summary_disclaimer')}</span>
+                </div>
             </div>
         `;
         
@@ -667,12 +709,20 @@
         }
         
         const regenerateBtn = document.getElementById('dqm-ai-regenerate-btn');
+        const regenerateHeaderBtn = document.getElementById('dqm-ai-regenerate-header-btn');
+        
+        const regenerateHandler = () => {
+            const cacheKey = `${lastAssetId}:${currentLocale}`;
+            delete aiSummaryCache[cacheKey];
+            generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+        };
+        
         if (regenerateBtn) {
-            regenerateBtn.addEventListener('click', () => {
-                const cacheKey = `${lastAssetId}:${currentLocale}`;
-                delete aiSummaryCache[cacheKey];
-                generateAISummary(lastAssetId, allCheckpoints, currentLocale);
-            });
+            regenerateBtn.addEventListener('click', regenerateHandler);
+        }
+        
+        if (regenerateHeaderBtn) {
+            regenerateHeaderBtn.addEventListener('click', regenerateHandler);
         }
     }
     
@@ -683,12 +733,14 @@
         container.innerHTML = `
             <div class="card dqm-ai-summary-card dqm-ai-error">
                 <div class="dqm-ai-summary-header">
-                    <h3>
-                        <i class="fa-solid fa-sparkles" style="color:#6554C0;margin-right:8px;"></i>
-                        ${t('AI Summary')}
+                    <div class="dqm-ai-header-left">
+                        <svg class="dqm-ai-sparkle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                        </svg>
+                        <h3>${t('AI Summary')}</h3>
                         <span class="dqm-ai-badge">ChatGPT</span>
-                    </h3>
-                    <button class="dqm-ai-settings-btn" id="dqm-ai-settings-btn" title="${t('AI Settings')}">
+                    </div>
+                    <button class="dqm-ai-icon-btn" id="dqm-ai-settings-btn" title="${t('AI Settings')}">
                         <i class="fa-solid fa-gear"></i>
                     </button>
                 </div>
@@ -717,80 +769,126 @@
     }
     
     function showAISettingsDialog() {
+        const translationEnabled = CrownpeakDQM.aiTranslationEnabled === '1';
+        const summaryEnabled = CrownpeakDQM.aiSummaryEnabled === '1';
+        const hasOpenAIKey = CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10;
+        const accordionExpanded = !hasOpenAIKey;
+        
         const dialogHTML = `
             <div class="dqm-ai-settings-dialog" id="dqm-ai-settings-dialog">
                 <div class="dqm-ai-settings-content">
                     <div class="dqm-ai-settings-header">
-                        <h2>
-                            <i class="fa-solid fa-gear"></i>
-                            ${t('AI Assistant Settings')}
-                        </h2>
+                        <div class="dqm-ai-settings-title">
+                            <svg class="dqm-ai-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                            </svg>
+                            <h2>${t('AI Assistant')}</h2>
+                        </div>
                         <button class="dqm-dialog-close" id="dqm-ai-settings-close">×</button>
                     </div>
                     <div class="dqm-ai-settings-body">
-                        <div class="dqm-ai-info-box">
-                            <i class="fa-solid fa-circle-info"></i>
-                            <p>${t('AI summary uses ChatGPT to generate concise bullet-point summaries of quality issues.')}</p>
-                        </div>
-                        
-                        <div class="dqm-ai-setting-item">
-                            <div class="dqm-ai-setting-label">
-                                <strong>${t('Status')}</strong>
+                        <div class="dqm-toggle-section">
+                            <div class="dqm-toggle-item">
+                                <div class="dqm-toggle-info">
+                                    <strong>${t('Auto-translate DQM results')}</strong>
+                                    <p class="dqm-toggle-description">${t('When enabled, checkpoint names and descriptions are translated based on your DQM language setting.')}</p>
+                                </div>
+                                <label class="dqm-switch">
+                                    <input type="checkbox" id="dqm-translation-toggle" ${translationEnabled ? 'checked' : ''} disabled>
+                                    <span class="dqm-switch-slider"></span>
+                                </label>
                             </div>
-                            <div class="dqm-ai-setting-value">
-                                ${CrownpeakDQM.aiSummaryEnabled === '1' ? 
-                                    '<span class="dqm-status-enabled"><i class="fa-solid fa-circle-check"></i> ' + t('Enabled') + '</span>' :
-                                    '<span class="dqm-status-disabled"><i class="fa-solid fa-circle-xmark"></i> ' + t('Disabled') + '</span>'
-                                }
-                            </div>
-                        </div>
-                        
-                        <div class="dqm-ai-setting-item">
-                            <div class="dqm-ai-setting-label">
-                                <strong>${t('OpenAI Model')}</strong>
-                            </div>
-                            <div class="dqm-ai-setting-value">
-                                ${CrownpeakDQM.openaiModel || 'gpt-4o-mini'}
+                            
+                            <div class="dqm-toggle-item">
+                                <div class="dqm-toggle-info">
+                                    <strong>${t('AI summary card')}</strong>
+                                </div>
+                                <label class="dqm-switch">
+                                    <input type="checkbox" id="dqm-summary-toggle" ${summaryEnabled ? 'checked' : ''} disabled>
+                                    <span class="dqm-switch-slider"></span>
+                                </label>
                             </div>
                         </div>
                         
-                        <div class="dqm-ai-setting-item">
-                            <div class="dqm-ai-setting-label">
-                                <strong>${t('API Key Status')}</strong>
+                        <div class="dqm-accordion" id="dqm-ai-accordion">
+                            <div class="dqm-accordion-header ${accordionExpanded ? 'expanded' : ''}" id="dqm-accordion-header">
+                                <div class="dqm-accordion-title">
+                                    <span>${t('ChatGPT (API)')}</span>
+                                    <div class="dqm-accordion-chips">
+                                        <span class="dqm-chip">${t('API')}</span>
+                                        <span class="dqm-chip">${t('Summary')}</span>
+                                    </div>
+                                </div>
+                                <svg class="dqm-accordion-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/>
+                                </svg>
                             </div>
-                            <div class="dqm-ai-setting-value">
-                                ${CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10 ?
-                                    '<span class="dqm-status-enabled"><i class="fa-solid fa-key"></i> ' + t('Configured') + '</span>' :
-                                    '<span class="dqm-status-disabled"><i class="fa-solid fa-triangle-exclamation"></i> ' + t('Not configured') + '</span>'
-                                }
-                            </div>
-                        </div>
-                        
-                        <div class="dqm-ai-setting-item">
-                            <div class="dqm-ai-setting-label">
-                                <strong>${t('Cache')}</strong>
-                            </div>
-                            <div class="dqm-ai-setting-value">
-                                ${Object.keys(aiSummaryCache).length} ${t('cached summaries')}
-                                <button class="dqm-ai-clear-cache-btn" id="dqm-ai-clear-cache-btn">
-                                    <i class="fa-solid fa-trash"></i> ${t('Clear Cache')}
-                                </button>
+                            <div class="dqm-accordion-content ${accordionExpanded ? 'expanded' : ''}" id="dqm-accordion-content">
+                                <div class="dqm-ai-info-box">
+                                    <i class="fa-solid fa-circle-info"></i>
+                                    <p>${t('AI may hallucinate or provide inaccurate information. Review results carefully.')}</p>
+                                </div>
+                                
+                                <div class="dqm-field-group">
+                                    <label>${t('Model')}</label>
+                                    <div class="dqm-readonly-field">
+                                        ${CrownpeakDQM.openaiModel || 'gpt-4o-mini'}
+                                    </div>
+                                </div>
+                                
+                                <div class="dqm-field-group">
+                                    <label>${t('Base URL')}</label>
+                                    <div class="dqm-readonly-field">
+                                        https://api.openai.com/v1
+                                    </div>
+                                </div>
+                                
+                                <div class="dqm-field-group">
+                                    <label>${t('API Key')}</label>
+                                    <div class="dqm-readonly-field">
+                                        ${hasOpenAIKey ? '••••••••••••••••' : t('Not configured')}
+                                    </div>
+                                </div>
+                                
+                                ${translationEnabled && hasOpenAIKey ? `
+                                <div class="dqm-status-section">
+                                    <div class="dqm-alert dqm-alert-success">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                        <span>${t('Translation is enabled and working')}</span>
+                                    </div>
+                                </div>
+                                ` : ''}
+                                
+                                <div class="dqm-settings-link">
+                                    <p>
+                                        ${t('To change AI settings, visit')} 
+                                        <a href="${window.location.origin}/wp-admin/options-general.php?page=dqm-wordpress-plugin" target="_blank">
+                                            ${t('Plugin Settings')} <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                        </a>
+                                    </p>
+                                </div>
                             </div>
                         </div>
                         
                         <div class="dqm-ai-warning-box">
                             <i class="fa-solid fa-triangle-exclamation"></i>
-                            <p>${t('AI may generate incorrect or misleading information. Always verify results.')}</p>
+                            <p>${t('AI may hallucinate or provide inaccurate information. Review results carefully.')}</p>
                         </div>
-                        
-                        <div class="dqm-ai-settings-footer">
-                            <p style="color:#666;font-size:13px;">
-                                ${t('To change AI settings, visit')} 
-                                <a href="${window.location.origin}/wp-admin/options-general.php?page=dqm-wordpress-plugin" target="_blank">
-                                    ${t('Plugin Settings')} <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                                </a>
-                            </p>
-                        </div>
+                    </div>
+                    
+                    <div class="dqm-ai-settings-footer">
+                        <button class="dqm-action-btn dqm-action-btn-secondary" id="dqm-ai-clear-cache-btn">
+                            ${t('Clear AI cache')}
+                        </button>
+                        <button class="dqm-action-btn dqm-action-btn-secondary" id="dqm-ai-translate-btn" ${!translationEnabled || !hasOpenAIKey ? 'disabled' : ''}>
+                            ${t('Translate missing items')}
+                        </button>
+                        <button class="dqm-action-btn dqm-action-btn-secondary" id="dqm-ai-restart-summary-btn" ${!summaryEnabled || !hasOpenAIKey ? 'disabled' : ''}>
+                            ${t('Restart summary')}
+                        </button>
+                        <button class="dqm-action-btn dqm-action-btn-primary" id="dqm-ai-close-btn">
+                            ${t('Close')}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -805,7 +903,20 @@
         
         const dialog = document.getElementById('dqm-ai-settings-dialog');
         const closeBtn = document.getElementById('dqm-ai-settings-close');
+        const closeBtnFooter = document.getElementById('dqm-ai-close-btn');
         const clearCacheBtn = document.getElementById('dqm-ai-clear-cache-btn');
+        const translateBtn = document.getElementById('dqm-ai-translate-btn');
+        const restartSummaryBtn = document.getElementById('dqm-ai-restart-summary-btn');
+        const accordionHeader = document.getElementById('dqm-accordion-header');
+        const accordionContent = document.getElementById('dqm-accordion-content');
+        
+        if (accordionHeader && accordionContent) {
+            accordionHeader.addEventListener('click', () => {
+                const isExpanded = accordionHeader.classList.contains('expanded');
+                accordionHeader.classList.toggle('expanded');
+                accordionContent.classList.toggle('expanded');
+            });
+        }
         
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
@@ -813,14 +924,36 @@
             });
         }
         
+        if (closeBtnFooter) {
+            closeBtnFooter.addEventListener('click', () => {
+                dialog.remove();
+            });
+        }
+        
         if (clearCacheBtn) {
             clearCacheBtn.addEventListener('click', () => {
                 aiSummaryCache = {};
-                clearCacheBtn.innerHTML = '<i class="fa-solid fa-check"></i> ' + t('Cleared!');
+                clearCacheBtn.innerHTML = '<i class="fa-solid fa-check"></i> ' + t('ai_cache_cleared');
                 clearCacheBtn.disabled = true;
                 setTimeout(() => {
-                    clearCacheBtn.innerHTML = '<i class="fa-solid fa-trash"></i> ' + t('Clear Cache');
+                    clearCacheBtn.innerHTML = t('ai_cache_clear');
                     clearCacheBtn.disabled = false;
+                }, 2000);
+            });
+        }
+        
+        if (restartSummaryBtn && !restartSummaryBtn.disabled) {
+            restartSummaryBtn.addEventListener('click', () => {
+                const cacheKey = `${lastAssetId}:${currentLocale}`;
+                delete aiSummaryCache[cacheKey];
+                if (lastAssetId) {
+                    generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+                }
+                restartSummaryBtn.innerHTML = '<i class="fa-solid fa-check"></i> ' + t('summary_regenerate');
+                restartSummaryBtn.disabled = true;
+                setTimeout(() => {
+                    restartSummaryBtn.innerHTML = t('summary_regenerate');
+                    restartSummaryBtn.disabled = false;
                 }, 2000);
             });
         }
@@ -852,14 +985,14 @@
             panel.appendChild(scoreCardContainer);
             const scanBtn = document.createElement('button');
             scanBtn.id = 'dqm-scan-content-sidebar-btn';
-            scanBtn.textContent = __('Run Quality Check', 'dqm-wordpress-plugin');
+            scanBtn.textContent = t('run_quality_check');
             scanBtn.className = 'primary-button';
             const headerContainer = document.createElement('div');
             headerContainer.className = 'dqm-header-container';
             
             const headerTitle = document.createElement('div');
             headerTitle.className = 'dqm-header-title';
-            headerTitle.textContent = 'Digital Quality & Accessibility';
+            headerTitle.textContent = t('title');
             headerContainer.appendChild(headerTitle);
             
             const languageSwitcher = createLanguageSwitcher();
@@ -870,7 +1003,7 @@
                 aiAssistantBtn.id = 'dqm-ai-assistant-btn';
                 aiAssistantBtn.className = 'dqm-ai-assistant-button';
                 aiAssistantBtn.setAttribute('type', 'button');
-                aiAssistantBtn.setAttribute('aria-label', t('AI Assistant'));
+                aiAssistantBtn.setAttribute('aria-label', t('ai_settings'));
                 aiAssistantBtn.innerHTML = '<svg class="dqm-ai-icon" focusable="false" aria-hidden="true" viewBox="0 0 24 24"><path d="m19 9 1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25z"></path></svg>';
                 aiAssistantBtn.onclick = function() {
                     showAISettingsDialog();
@@ -906,7 +1039,7 @@
             const failedCheckpointsCard = document.createElement('div');
             failedCheckpointsCard.className = 'card';
             const failedHeader = document.createElement('h3');
-            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + t('Failed Checkpoints');
+            failedHeader.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + t('failed_checkpoints_title');
             failedCheckpointsCard.appendChild(failedHeader);
 
             checkpointsList = document.createElement('div');
@@ -914,7 +1047,7 @@
             checkpointsList.className = '';
             failedCheckpointsCard.appendChild(checkpointsList);
             injectHighlightCSS();
-            function renderCheckpointsList(selectedTopic) {
+            renderCheckpointsList = function(selectedTopic) {
                 checkpointsList.innerHTML = '';
                 let filtered = selectedTopic === 'all'
                     ? allCheckpoints
@@ -931,8 +1064,8 @@
                     const noFailuresMsg = document.createElement('div');
                     noFailuresMsg.className = 'dqm-no-failures';
                     noFailuresMsg.textContent = selectedTopic === 'all'
-                        ? t('No failed checkpoints found!')
-                        : t('No failed checkpoints found for this topic.');
+                        ? t('no_issues_found')
+                        : t('no_issues_for_topic');
                     card.appendChild(noFailuresMsg);
                 } else {
                     const ul = document.createElement('ul');
@@ -1023,7 +1156,7 @@
                 }
 
                 checkpointsList.appendChild(card);
-            }
+            };
 
             injectHighlightCSS();
 
@@ -1077,22 +1210,22 @@
             topicsContainer.id = 'dqm-topics-container';
             topicsContainer.appendChild(topicsDiv);
             topicsContainer.appendChild(failedCheckpointsCard);
-            function renderScoreCard(passedCount, totalCount) {
+            renderScoreCard = function(passedCount, totalCount) {
                 const percent = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
                 let html = `
                     
                     <div class="card">
-                        <h3>📊 ${t('Quality Overview')}</h3>
+                        <h3>📊 ${t('quality_overview')}</h3>
                         <div class="chart-container">
                             <div class="pie-chart"></div>
                             <div class="legend">
                                 <div class="legend-item">
                                     <div class="legend-color passed"></div>
-                                    <span>Passed (${passedCount})</span>
+                                    <span>${t('passed')} (${passedCount})</span>
                                 </div>
                                 <div class="legend-item">
                                     <div class="legend-color failed"></div>
-                                    <span>Failed (${totalCount - passedCount})</span>
+                                    <span>${t('failed')} (${totalCount - passedCount})</span>
                                 </div>
                             </div>
                         </div>
@@ -1109,7 +1242,7 @@
                         'Usability': '#36b37e',
                     };
                     html += `<div class="card">
-                        <h3>📈 ${t('Quality Breakdown')}</h3>`;
+                        <h3>📈 ${t('quality_breakdown')}</h3>`;
                     Array.from(allTopics).sort().forEach((topicRaw, idx, arr) => {
                         const topic = (topicRaw || '').trim();
                         const checkpoints = allCheckpoints.filter(cp => Array.isArray(cp.topics) && cp.topics.map(t => (t || '').trim()).includes(topic));
@@ -1125,7 +1258,7 @@
                             <div class="dqm-breakdown-item">
                                 <div class="dqm-breakdown-header">
                                     <span class="${badgeClass}" style="background:${color}">${topic}</span>
-                                    <span>${passed}/${total} ${__('passed', 'dqm-wordpress-plugin')}</span>
+                                    <span>${passed}/${total} ${t('passed')}</span>
                                 </div>
                                 <div class="dqm-breakdown-bar">
                                     <div class="dqm-breakdown-progress" style="background: ${color}; width: ${percent}%;"></div>
@@ -1158,7 +1291,7 @@
                     percentLabel.textContent = `${percent}%`;
                     pieChart.appendChild(percentLabel);
                 }
-            }
+            };
             function showTopicsWithCheckpoints() {
                 topicsContainer.style.display = 'block';
                 renderCheckpointsList(topicsDropdown.value);
@@ -1626,6 +1759,27 @@
         
         updateUITranslations();
         
+        // Re-render score card if analysis data exists
+        if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
+            const total = allCheckpoints.length;
+            const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
+            const scoreCardContainer = document.getElementById('dqm-score-card-container');
+            if (scoreCardContainer) {
+                renderScoreCard(passed, total);
+            }
+        }
+        
+        // Re-render checkpoints list if it exists
+        const dropdown = document.getElementById('dqm-topics-dropdown');
+        if (dropdown && typeof renderCheckpointsList === 'function') {
+            renderCheckpointsList(dropdown.value);
+        }
+        
+        // Re-generate AI summary if needed
+        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled) {
+            generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+        }
+        
         const existingSwitcher = document.querySelector('.dqm-language-switcher');
         if (existingSwitcher) {
             const newSwitcher = createLanguageSwitcher();
@@ -1638,6 +1792,27 @@
         currentLocale = resolveLocale();
         updateUITranslations();
         
+        // Re-render score card if analysis data exists
+        if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
+            const total = allCheckpoints.length;
+            const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
+            const scoreCardContainer = document.getElementById('dqm-score-card-container');
+            if (scoreCardContainer) {
+                renderScoreCard(passed, total);
+            }
+        }
+        
+        // Re-render checkpoints list if it exists
+        const dropdown = document.getElementById('dqm-topics-dropdown');
+        if (dropdown && typeof renderCheckpointsList === 'function') {
+            renderCheckpointsList(dropdown.value);
+        }
+        
+        // Re-generate AI summary if needed
+        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled) {
+            generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+        }
+        
         const existingSwitcher = document.querySelector('.dqm-language-switcher');
         if (existingSwitcher) {
             const newSwitcher = createLanguageSwitcher();
@@ -1648,38 +1823,44 @@
     function updateUITranslations() {
         const currentTranslations = (window.DQM_I18N && window.DQM_I18N[currentLocale]) || window.DQM_I18N.en;
 
+        // Update header title
+        const headerTitle = document.querySelector('.dqm-header-title');
+        if (headerTitle) {
+            headerTitle.textContent = t('title');
+        }
+
         const scanButtons = document.querySelectorAll('#dqm-scan-content-sidebar-btn, #dqm-scan-content-after-failed-btn');
         scanButtons.forEach(function(btn) {
-            if (btn) btn.textContent = currentTranslations['Run Quality Check'];
+            if (btn) btn.textContent = t('run_quality_check');
         });
         
         const topicsLabel = document.querySelector('.dqm-topics-label');
         if (topicsLabel) {
-            topicsLabel.textContent = currentTranslations['Filter by Topic:'];
+            topicsLabel.textContent = t('Filter by Topic:');
         }
 
         const topicsDropdown = document.getElementById('dqm-topics-dropdown');
         if (topicsDropdown) {
             const firstOption = topicsDropdown.querySelector('option[value="all"]');
             if (firstOption) {
-                firstOption.textContent = currentTranslations['All Topics'];
+                firstOption.textContent = t('All Topics');
             }
         }
 
         if (toggleButton && toggleButton.style.display !== 'none') {
             const buttonText = currentHighlightMode === 'page' ? 
-                currentTranslations['Source'] : 
-                currentTranslations['Browser'];
+                t('Source') : 
+                t('Browser');
             toggleButton.textContent = buttonText;
         }
 
         const scoreCardHeadings = document.querySelectorAll('#dqm-score-card-container h3');
         scoreCardHeadings.forEach(function(heading) {
-            if (heading.textContent.includes('Quality Overview') || heading.textContent.includes('Qualitätsübersicht') || heading.textContent.includes('Resumen de calidad')) {
-                heading.textContent = '📊 ' + currentTranslations['Quality Overview'];
+            if (heading.textContent.includes('Quality Overview') || heading.textContent.includes('Gesamtqualität') || heading.textContent.includes('Calidad general')) {
+                heading.textContent = '📊 ' + t('quality_overview');
             }
-            if (heading.textContent.includes('Quality Breakdown') || heading.textContent.includes('Qualitätsaufschlüsselung') || heading.textContent.includes('Desglose de calidad')) {
-                heading.textContent = '📈 ' + currentTranslations['Quality Breakdown'];
+            if (heading.textContent.includes('Quality Breakdown') || heading.textContent.includes('Qualitätsübersicht') || heading.textContent.includes('Desglose de calidad')) {
+                heading.textContent = '📈 ' + t('quality_breakdown');
             }
         });
 
@@ -1688,23 +1869,23 @@
             const text = span.textContent;
             const match = text.match(/(\d+)\/(\d+)\s+(.+)/);
             if (match) {
-                span.textContent = match[1] + '/' + match[2] + ' ' + currentTranslations['passed'];
+                span.textContent = match[1] + '/' + match[2] + ' ' + t('passed');
             }
         });
 
         document.querySelectorAll('.checkpoint-no-highlight').forEach(function(el) {
-            el.textContent = currentTranslations['Cannot highlight'];
+            el.textContent = t('Cannot highlight');
         });
         
         document.querySelectorAll('.checkpoint-highlight-info').forEach(function(el) {
-            el.textContent = currentTranslations['Click to highlight'];
+            el.textContent = t('Click to highlight');
         });
         
         const failedHeaders = document.querySelectorAll('.card h3');
         failedHeaders.forEach(function(heading) {
             const icon = heading.querySelector('i.fa-triangle-exclamation');
             if (icon) {
-                heading.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + currentTranslations['Failed Checkpoints'];
+                heading.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + t('failed_checkpoints_title');
             }
         });
         
