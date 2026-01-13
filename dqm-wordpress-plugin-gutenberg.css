@@ -6,7 +6,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .dqm-header-title {
@@ -17,10 +18,62 @@
 }
 
 .dqm-language-switcher {
-  position: relative;
-  margin: 0;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.dqm-language-select {
+  padding: 6px 32px 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background-color: #fff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  min-width: 100px;
+}
+
+.dqm-language-select:hover {
+  border-color: #999;
+}
+
+.dqm-language-select:focus {
+  outline: none;
+  border-color: #0073aa;
+  box-shadow: 0 0 0 1px #0073aa;
+}
+
+.dqm-locale-source {
+  font-size: 11px;
+  color: #666;
+  padding: 3px 6px;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.dqm-locale-reset {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: #fff;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dqm-locale-reset:hover {
+  background-color: #f5f5f5;
+  border-color: #999;
+  color: #333;
 }
 
 .dqm-language-button, .dqm-ai-assistant-button {

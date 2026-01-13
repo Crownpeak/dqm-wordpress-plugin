@@ -12,32 +12,213 @@
     let renderScoreCard = null;
     let renderCheckpointsList = null;
 
+    let aiContext = null;
     let aiTranslationManager = null;
-    if (window.AITranslationManager) {
-        aiTranslationManager = new window.AITranslationManager();
+    
+    if (window.AIContextManager) {
+        const translationConfig = {
+            enabledByDefault: false,
+            computeBudgetMs: 15000
+        };
+        const summaryConfig = {
+            timeoutMs: 45000
+        };
+        
+        aiContext = new window.AIContextManager({
+            translation: translationConfig,
+            summary: summaryConfig
+        });
+        
+        if (window.AITranslationManager) {
+            aiTranslationManager = new window.AITranslationManager(aiContext);
+        }
+        
+        if (CrownpeakDQM && CrownpeakDQM.openaiApiKey) {
+            aiContext.setOpenAiApiKey(CrownpeakDQM.openaiApiKey);
+        }
+        if (CrownpeakDQM && CrownpeakDQM.openaiModel) {
+            aiContext.setOpenAiModel(CrownpeakDQM.openaiModel);
+        }
+        if (CrownpeakDQM && CrownpeakDQM.openaiBaseUrl) {
+            aiContext.setOpenAiBaseUrl(CrownpeakDQM.openaiBaseUrl);
+        }
+        if (CrownpeakDQM && CrownpeakDQM.reasoningEffort) {
+            aiContext.setReasoningEffort(CrownpeakDQM.reasoningEffort);
+        }
     }
 
-    const AI_STORAGE_KEYS = {
-        translationEnabled: 'dqm_translation_enabled',
+    const AI_STORAGE_KEYS = window.AI_STORAGE_KEYS || {
+        translationEnabled: 'dqm_translate_results_enabled',
         translationMode: 'dqm_translation_mode',
-        summaryEnabled: 'dqm_summary_enabled'
+        summaryEnabled: 'dqm_summary_enabled',
+        openaiApiKey: 'dqm_openai_apiKey',
+        openaiModel: 'dqm_openai_model',
+        openaiBaseUrl: 'dqm_openai_baseUrl',
+        targetLanguage: 'dqm_target_language',
+        reasoningEffort: 'dqm_reasoning_effort',
+        debug: 'dqm_debug',
+        translationCache: 'dqm_translation_cache',
+        summaryCache: 'dqm_summary_cache',
+        computeBudgetMs: 'dqm_compute_budget_ms'
+    };
+
+    const AI_CONFIG = window.AI_CONFIG || {
+        translation: {
+            enabledByDefault: getAIToggleState('translationEnabled', 'false') === 'true',
+            computeBudgetMs: parseInt(getAIToggleState('computeBudgetMs', '15000'), 10),
+            modes: {
+                fast: { timeout: 15000, maxRetries: 2 },
+                full: { timeout: 45000, maxRetries: 3 }
+            },
+            persistentCache: true,
+            cacheExpiry: 24 * 60 * 60 * 1000
+        },
+        summary: {
+            timeoutMs: 45000,
+            maxRetries: 2,
+            persistentCache: true,
+            cacheExpiry: 24 * 60 * 60 * 1000
+        },
+        retry: {
+            maxAttempts: 3,
+            backoffMs: 1000,
+            backoffMultiplier: 2
+        }
     };
 
     function getAIToggleState(key, defaultValue) {
+        if (aiContext) {
+            const state = aiContext.getState();
+            const keyMap = {
+                'translationEnabled': 'translationEnabled',
+                'translationMode': 'translationMode',
+                'summaryEnabled': 'summaryEnabled',
+                'openaiApiKey': 'openAiApiKey',
+                'openaiModel': 'openAiModel',
+                'openaiBaseUrl': 'openAiBaseUrl',
+                'reasoningEffort': 'reasoningEffort',
+                'computeBudgetMs': 'computeBudgetMs'
+            };
+            const mappedKey = keyMap[key];
+            if (mappedKey && state[mappedKey] !== undefined) {
+                const value = state[mappedKey];
+                return typeof value === 'boolean' ? (value ? 'true' : 'false') : String(value);
+            }
+        }
+        
+        if (typeof window === 'undefined' || !window.localStorage) return defaultValue;
         try {
-            const value = localStorage.getItem(AI_STORAGE_KEYS[key]);
+            const storageKey = AI_STORAGE_KEYS[key] || key;
+            const value = localStorage.getItem(storageKey);
             return value !== null ? value : defaultValue;
         } catch (e) {
+            console.warn('[DQM] Failed to get AI toggle state:', e);
             return defaultValue;
         }
     }
 
     function setAIToggleState(key, value) {
-        try {
-            localStorage.setItem(AI_STORAGE_KEYS[key], value);
-        } catch (e) {
-            console.warn('Failed to save AI toggle state:', e);
+        if (aiContext) {
+            const setters = {
+                'translationEnabled': () => aiContext.setTranslationEnabled(value === 'true' || value === true),
+                'translationMode': () => aiContext.setTranslationMode(value),
+                'summaryEnabled': () => aiContext.setSummaryEnabled(value === 'true' || value === true),
+                'openaiApiKey': () => aiContext.setOpenAiApiKey(String(value)),
+                'openaiModel': () => aiContext.setOpenAiModel(String(value)),
+                'openaiBaseUrl': () => aiContext.setOpenAiBaseUrl(String(value)),
+                'reasoningEffort': () => aiContext.setReasoningEffort(value)
+            };
+            
+            if (setters[key]) {
+                setters[key]();
+                return;
+            }
         }
+        
+        if (typeof window === 'undefined' || !window.localStorage) return;
+        try {
+            const storageKey = AI_STORAGE_KEYS[key] || key;
+            localStorage.setItem(storageKey, value);
+        } catch (e) {
+            console.warn('[DQM] Failed to save AI toggle state:', e);
+        }
+    }
+
+    function getPersistentCache(cacheType) {
+        if (typeof window === 'undefined' || !window.localStorage) return {};
+        try {
+            const key = cacheType === 'translation' ? AI_STORAGE_KEYS.translationCache : AI_STORAGE_KEYS.summaryCache;
+            const cached = localStorage.getItem(key);
+            if (!cached) return {};
+            
+            const data = JSON.parse(cached);
+            const now = Date.now();
+            const expiry = cacheType === 'translation' 
+                ? AI_CONFIG.translation.cacheExpiry 
+                : AI_CONFIG.summary.cacheExpiry;
+            
+            const validEntries = {};
+            Object.keys(data).forEach(cacheKey => {
+                const entry = data[cacheKey];
+                if (entry && entry.timestamp && (now - entry.timestamp) < expiry) {
+                    validEntries[cacheKey] = entry;
+                }
+            });
+            
+            return validEntries;
+        } catch (e) {
+            console.warn('[DQM] Failed to load persistent cache:', e);
+            return {};
+        }
+    }
+
+    function setPersistentCache(cacheType, cacheKey, data) {
+        if (typeof window === 'undefined' || !window.localStorage) return false;
+        try {
+            const key = cacheType === 'translation' ? AI_STORAGE_KEYS.translationCache : AI_STORAGE_KEYS.summaryCache;
+            const cache = getPersistentCache(cacheType);
+            cache[cacheKey] = {
+                data: data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(key, JSON.stringify(cache));
+            return true;
+        } catch (e) {
+            console.warn('[DQM] Failed to save to persistent cache:', e);
+            return false;
+        }
+    }
+
+    function clearPersistentCache(cacheType) {
+        if (typeof window === 'undefined' || !window.localStorage) return false;
+        try {
+            if (cacheType === 'all') {
+                localStorage.removeItem(AI_STORAGE_KEYS.translationCache);
+                localStorage.removeItem(AI_STORAGE_KEYS.summaryCache);
+            } else {
+                const key = cacheType === 'translation' ? AI_STORAGE_KEYS.translationCache : AI_STORAGE_KEYS.summaryCache;
+                localStorage.removeItem(key);
+            }
+            return true;
+        } catch (e) {
+            console.warn('[DQM] Failed to clear persistent cache:', e);
+            return false;
+        }
+    }
+
+    function getCacheStats() {
+        const translationCache = getPersistentCache('translation');
+        const summaryCache = getPersistentCache('summary');
+        return {
+            translation: {
+                count: Object.keys(translationCache).length,
+                size: JSON.stringify(translationCache).length
+            },
+            summary: {
+                count: Object.keys(summaryCache).length,
+                size: JSON.stringify(summaryCache).length
+            }
+        };
     }
 
     let translationEnabled = getAIToggleState('translationEnabled', 'false') === 'true';
@@ -53,6 +234,7 @@
     const SUPPORTED_LOCALES = ['en', 'de', 'es'];
     const DEFAULT_LOCALE = 'en';
     const LOCALE_STORAGE_KEY = 'dqm_locale';
+    const LOCALE_PARAM_KEY = 'dqmUiLang';
 
     const translations = {
         en: {
@@ -61,6 +243,7 @@
             language_de: 'German',
             language_es: 'Spanish',
             reset: 'Reset',
+            source_url: 'URL parameter',
             source_user: 'Custom selected',
             source_navigator: 'Browser setting',
             source_default: 'Default language'
@@ -71,6 +254,7 @@
             language_de: 'Deutsch',
             language_es: 'Spanisch',
             reset: 'Zurücksetzen',
+            source_url: 'URL-Parameter',
             source_user: 'Durch Benutzer ausgewählt',
             source_navigator: 'Browser-Einstellung',
             source_default: 'Standard-Sprache'
@@ -81,6 +265,7 @@
             language_de: 'Alemán',
             language_es: 'Español',
             reset: 'Restablecer',
+            source_url: 'Parámetro URL',
             source_user: 'Seleccionado manualmente',
             source_navigator: 'Configuración del navegador',
             source_default: 'Idioma predeterminado'
@@ -99,14 +284,17 @@
     }
 
     function loadSavedLocale() {
+        if (typeof window === 'undefined' || !window.localStorage) return null;
         try {
             return localStorage.getItem(LOCALE_STORAGE_KEY);
         } catch (e) {
+            console.warn('[DQM i18n] Failed to load saved locale:', e);
             return null;
         }
     }
 
     function persistLocale(locale) {
+        if (typeof window === 'undefined' || !window.localStorage) return;
         try {
             if (locale) {
                 localStorage.setItem(LOCALE_STORAGE_KEY, locale);
@@ -114,13 +302,13 @@
                 localStorage.removeItem(LOCALE_STORAGE_KEY);
             }
         } catch (e) {
-            console.warn('Failed to persist locale:', e);
+            console.warn('[DQM i18n] Failed to persist locale:', e);
         }
     }
 
     function resolveLocale() {
         const params = new URLSearchParams(window.location.search);
-        const urlLocale = normalizeLocale(params.get('dqmUiLang'));
+        const urlLocale = normalizeLocale(params.get(LOCALE_PARAM_KEY));
         if (urlLocale) {
             localeSource = 'url';
             userOverride = false;
@@ -134,7 +322,7 @@
             return savedLocale;
         }
 
-        const navigatorLocale = normalizeLocale(navigator.language);
+        const navigatorLocale = normalizeLocale(navigator.language || navigator.userLanguage);
         if (navigatorLocale) {
             localeSource = 'navigator';
             userOverride = false;
@@ -170,7 +358,101 @@
         return translation;
     }
 
+    window.DQM_i18n = {
+        t: t,
+        changeLanguage: changeLanguage,
+        resetLanguage: resetLanguage,
+        getLocaleInfo: getLocaleInfo,
+        getCurrentLocale: () => currentLocale,
+        getSupportedLocales: () => SUPPORTED_LOCALES,
+        normalizeLocale: normalizeLocale,
+        SUPPORTED_LOCALES: SUPPORTED_LOCALES,
+        DEFAULT_LOCALE: DEFAULT_LOCALE,
+        LOCALE_STORAGE_KEY: LOCALE_STORAGE_KEY,
+        LOCALE_PARAM_KEY: LOCALE_PARAM_KEY
+    };
+
+    window.DQM_AI = {
+        getPersistentCache: getPersistentCache,
+        setPersistentCache: setPersistentCache,
+        clearPersistentCache: clearPersistentCache,
+        getCacheStats: getCacheStats,
+        getAIToggleState: getAIToggleState,
+        setAIToggleState: setAIToggleState,
+        generateAISummary: generateAISummary,
+        AI_STORAGE_KEYS: AI_STORAGE_KEYS,
+        AI_CONFIG: AI_CONFIG
+    };
+
     currentLocale = resolveLocale();
+
+    function updateUITranslations() {
+        const headerTitle = document.querySelector('.dqm-header-title');
+        if (headerTitle) {
+            headerTitle.textContent = t('title');
+        }
+        
+        const scanBtn = document.getElementById('dqm-scan-content-sidebar-btn');
+        if (scanBtn) {
+            scanBtn.textContent = t('run_quality_check');
+        }
+        
+        const aiSettingsBtn = document.getElementById('dqm-ai-assistant-btn');
+        if (aiSettingsBtn) {
+            aiSettingsBtn.setAttribute('aria-label', t('ai_settings'));
+        }
+    }
+
+    (async function initializeI18n() {
+        try {
+            await window.DQM_I18N.initializeTranslations(currentLocale);
+            updateUITranslations();
+        } catch (error) {
+            console.error('[DQM] Failed to initialize translations:', error);
+        }
+    })();
+
+    function getLocaleInfo() {
+        return {
+            locale: currentLocale,
+            source: localeSource,
+            isUserOverride: userOverride
+        };
+    }
+
+    function changeLanguage(newLocale) {
+        const normalized = normalizeLocale(newLocale);
+        if (!normalized) {
+            console.warn('[DQM i18n] Invalid locale:', newLocale);
+            return false;
+        }
+        
+        currentLocale = normalized;
+        localeSource = 'user';
+        userOverride = true;
+        persistLocale(normalized);
+        
+        if (window.DQM_I18N && window.DQM_I18N.setCurrentLocale) {
+            window.DQM_I18N.setCurrentLocale(normalized);
+        }
+        
+        if (aiContext) {
+            aiContext.updateLanguage(normalized);
+        }
+        
+        window.DQM_I18N.loadLanguageFile(normalized).catch(error => {
+            console.error('[DQM] Failed to load language file:', error);
+        });
+        
+        return true;
+    }
+
+    function resetLanguage() {
+        persistLocale(null);
+        const resolved = resolveLocale();
+        currentLocale = resolved;
+        return resolved;
+    }
 
     const translateText = function(text) {
         return __(text, 'dqm-wordpress-plugin');
@@ -593,7 +875,7 @@
         handleTabSwitch();
     });
 
-    function generateAISummary(assetId, checkpoints, targetLang = currentLocale) {
+    function generateAISummary(assetId, checkpoints, targetLang = currentLocale, forceRegenerate = false) {
         const container = document.getElementById('dqm-ai-summary-container');
         if (!container) return;
 
@@ -606,9 +888,20 @@
         }
 
         const cacheKey = `${assetId}:${targetLang}`;
-        if (aiSummaryCache[cacheKey]) {
-            renderAISummary(aiSummaryCache[cacheKey], false);
-            return;
+        
+        if (!forceRegenerate) {
+            if (aiSummaryCache[cacheKey]) {
+                renderAISummary(aiSummaryCache[cacheKey], false);
+                return;
+            }
+            
+            const persistentCache = getPersistentCache('summary');
+            if (persistentCache[cacheKey]) {
+                const cachedData = persistentCache[cacheKey].data;
+                aiSummaryCache[cacheKey] = cachedData;
+                renderAISummary(cachedData, false);
+                return;
+            }
         }
 
         container.style.display = 'block';
@@ -654,6 +947,7 @@
         .then(data => {
             if (data.success) {
                 aiSummaryCache[cacheKey] = data;
+                setPersistentCache('summary', cacheKey, data);
                 renderAISummary(data, true);
             } else {
                 renderAISummaryError(data.message || __('Failed to generate AI summary', 'dqm-wordpress-plugin'));
@@ -739,7 +1033,10 @@
         const regenerateHandler = () => {
             const cacheKey = `${lastAssetId}:${currentLocale}`;
             delete aiSummaryCache[cacheKey];
-            generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+            const persistentCache = getPersistentCache('summary');
+            delete persistentCache[cacheKey];
+            setPersistentCache('summary', cacheKey, null);
+            generateAISummary(lastAssetId, allCheckpoints, currentLocale, true);
         };
 
         if (regenerateBtn) {
@@ -1014,13 +1311,26 @@
         }
 
         if (clearCacheBtn) {
+            const stats = getCacheStats();
+            const totalEntries = stats.translation.count + stats.summary.count;
+            if (totalEntries > 0) {
+                clearCacheBtn.innerHTML = `<i class="fa-solid fa-trash"></i> ${t('Clear AI cache')} (${totalEntries})`;
+            }
+            
             clearCacheBtn.addEventListener('click', () => {
                 aiSummaryCache = {};
+                clearPersistentCache('all');
+                
+                if (aiTranslationManager) {
+                    aiTranslationManager.clearCache();
+                }
+                
                 clearCacheBtn.innerHTML = '<i class="fa-solid fa-check"></i> ' + t('ai_cache_cleared');
                 clearCacheBtn.disabled = true;
                 setTimeout(() => {
                     clearCacheBtn.innerHTML = t('ai_cache_clear');
                     clearCacheBtn.disabled = false;
+                    dialog.remove();
                 }, 2000);
             });
         }
@@ -1053,6 +1363,57 @@
                 document.removeEventListener('keydown', escapeHandler);
             }
         });
+    }
+
+    function createLanguageSwitcher() {
+        const container = document.createElement('div');
+        container.className = 'dqm-language-switcher';
+        
+        const select = document.createElement('select');
+        select.className = 'dqm-language-select';
+        select.setAttribute('aria-label', t('language'));
+        
+        SUPPORTED_LOCALES.forEach(locale => {
+            const option = document.createElement('option');
+            option.value = locale;
+            option.textContent = t(`language_${locale}`);
+            if (locale === currentLocale) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        select.addEventListener('change', (e) => {
+            const newLocale = e.target.value;
+            if (changeLanguage(newLocale)) {
+                window.location.reload();
+            }
+        });
+        
+        const localeInfo = getLocaleInfo();
+        if (localeInfo.source !== 'default') {
+            const sourceLabel = document.createElement('span');
+            sourceLabel.className = 'dqm-locale-source';
+            sourceLabel.textContent = t(`source_${localeInfo.source}`);
+            sourceLabel.title = `Locale source: ${localeInfo.source}`;
+            container.appendChild(sourceLabel);
+            
+            if (localeInfo.isUserOverride) {
+                const resetBtn = document.createElement('button');
+                resetBtn.className = 'dqm-locale-reset';
+                resetBtn.textContent = t('reset');
+                resetBtn.title = 'Reset to browser/default language';
+                resetBtn.addEventListener('click', () => {
+                    resetLanguage();
+                    window.location.reload();
+                });
+                container.appendChild(resetBtn);
+            }
+        }
+        
+        container.appendChild(select);
+        
+        return container;
     }
 
     function showDqmPanel(show) {
@@ -1484,14 +1845,13 @@
                         const percent = total > 0 ? Math.round((passed / total) * 100) : 0;
                         const color = topicColors[topic] || '#888';
                         const badgeClass = 'badge ' + topic.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                        const translatedTopic = t(topic) || topic;
                         if (idx > 0) {
                             html += `<hr class="dqm-breakdown-divider">`;
                         }
                         html += `
                             <div class="dqm-breakdown-item">
                                 <div class="dqm-breakdown-header">
-                                    <span class="${badgeClass}" style="background:${color}">${translatedTopic}</span>
+                                    <span class="${badgeClass}" style="background:${color}">${topic}</span>
                                     <span>${passed}/${total} ${t('passed')}</span>
                                 </div>
                                 <div class="dqm-breakdown-bar">

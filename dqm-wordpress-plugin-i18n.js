@@ -1,588 +1,118 @@
 (function(window) {
     'use strict';
 
+    const LANGUAGE_FILES = {
+        en: 'languages/en.json',
+        de: 'languages/de.json',
+        es: 'languages/es.json'
+    };
+
+    const loadedTranslations = {};
+    let currentLocale = 'en';
+
+    async function loadLanguageFile(locale) {
+        if (loadedTranslations[locale]) {
+            return loadedTranslations[locale];
+        }
+
+        const filePath = LANGUAGE_FILES[locale];
+        if (!filePath) {
+            console.warn('[DQM i18n] No language file found for locale: ' + locale);
+            return null;
+        }
+
+        try {
+            const pluginUrl = window.CrownpeakDQM?.pluginUrl || '';
+            const response = await fetch(pluginUrl + filePath);
+            
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+            }
+
+            const translations = await response.json();
+            loadedTranslations[locale] = translations;
+            return translations;
+        } catch (error) {
+            console.error('[DQM i18n] Failed to load language file for ' + locale + ':', error);
+            return null;
+        }
+    }
+
+    async function initializeTranslations(locale) {
+        locale = locale || 'en';
+        currentLocale = locale;
+        await loadLanguageFile(locale);
+        
+        if (locale !== 'en') {
+            await loadLanguageFile('en');
+        }
+    }
+
+    function getTranslation(key, locale) {
+        locale = locale || currentLocale;
+        const translations = loadedTranslations[locale];
+        if (translations && translations[key]) {
+            return translations[key];
+        }
+
+        if (locale !== 'en') {
+            const fallbackTranslations = loadedTranslations['en'];
+            if (fallbackTranslations && fallbackTranslations[key]) {
+                return fallbackTranslations[key];
+            }
+        }
+
+        return key;
+    }
+
+    function setCurrentLocale(locale) {
+        currentLocale = locale;
+    }
+
+    function getCurrentLocale() {
+        return currentLocale;
+    }
+
+    function getAvailableLocales() {
+        return Object.keys(LANGUAGE_FILES);
+    }
+
     window.DQM_I18N = {
-        en: {
-            'title': 'Digital Quality and Accessibility',
-            'ready_title': 'Ready to Analyze',
-            'ready_body': 'Click "Run Quality Check" to analyze the current page for accessibility and quality issues.',
-            'Run Quality Check': 'Run Quality Check',
-            'run_quality_check': 'Run Quality Check',
-            'analyzing': 'Analyzing...',
-            'access_denied': 'Access Denied',
-            'config_required': 'Configuration Required',
-            'auth_error': 'Authentication Error',
-            'close_sidebar': 'Close sidebar',
-            'fab_tooltip': 'DQM Quality Analysis',
-            'Filter by Topic:': 'Filter by Topic:',
-            'All Topics': 'All Topics',
-            
-            // Analysis results
-            'quality_overview': 'Quality Overview',
-            'Quality Overview': 'Quality Overview',
-            'overall_quality': 'Overall Quality',
-            'Quality Breakdown': 'Quality Breakdown',
-            'quality_breakdown': 'Quality Breakdown',
-            'all_passed': 'All Passed',
-            'x_of_y_passed': '{{passed}} of {{total}} passed',
-            'percent_passed': '{{percent}}% passed',
-            'passed': 'passed',
-            'Passed': 'Passed',
-            'failed': 'Failed',
-            'Failed': 'Failed',
-            'show_all_errors': 'Show Page with all Errors',
-            
-            // Failed checkpoints
-            'failed_checkpoints_title': 'Failed Checkpoints',
-            'Failed Checkpoints': 'Failed Checkpoints',
-            'failed_checkpoints': 'Failed Checkpoints',
-            'no_issues_found': 'No failed checkpoints found!',
-            'no_issues_for_topic': 'No failed checkpoints found for this topic.',
-            'filter_by_category': 'Filter by Category',
-            'showing_categories': 'Showing {{count}} of {{total}} categories',
-            'showing_all_categories': 'Showing all of {{total}} categories',
-            'show_all': 'Show All',
-            'Cannot highlight': 'Cannot highlight',
-            'Click to highlight': 'Click to highlight',
-            'view_in_browser': 'View in Browser',
-            'view_source': 'View Source',
-            'No topics found': 'No topics found',
-            'No checkpoints found.': 'No checkpoints found.',
-            'No failed checkpoints found!': 'No failed checkpoints found!',
-            'No failed checkpoints found for this topic.': 'No failed checkpoints found for this topic.',
-            
-            // Error states
-            'Error loading topics': 'Error loading topics',
-            'Error loading checkpoints.': 'Error loading checkpoints.',
-            'Loading errors...': 'Loading errors...',
-            'Detailed Errors': 'Detailed Errors',
-            'No errors found!': 'No errors found!',
-            'analysis_failed': 'Analysis Failed',
-            'no_highlighted_content': 'No highlighted content available.',
-            'failed_load_browser': 'Failed to load browser view. Please try again.',
-            'failed_load_highlights': 'Failed to load highlighted content. Please try again.',
-            'failed_load_source': 'Failed to load source view. Please try again.',
-            'failed_load_all_errors': 'Failed to load page with all errors. Please try again.',
-            'loading_views': 'Loading both views...',
-            
-            // Highlight modal
-            'highlighted_errors': 'Highlighted Errors',
-            'browser_view': 'Browser View',
-            'source_view': 'Source View',
-            'x_of_y': '{{current}} of {{total}}',
-            'prev_highlight': 'Previous Error',
-            'next_highlight': 'Next Error',
-            'reload_highlights': 'Reload Highlights',
-            'open_in_new_tab': 'Open in New Tab',
-            'enable_js': 'Enable JavaScript',
-            'disable_js': 'Disable JavaScript',
-            'no_source_content': 'No source content available for this checkpoint.',
-            
-            // Spellcheck
-            'Spellcheck Results': 'Spellcheck Results',
-            'occurrence': 'occurrence',
-            'No spelling issues found!': 'No spelling issues found!',
-            
-            // Navigation
-            'Source': 'Source',
-            'Browser': 'Browser',
-            'Close': 'Close',
-            'Topics: ': 'Topics: ',
-            'Retry': 'Retry',
-            
-            'Accessibility': 'Accessibility',
-            'SEO': 'SEO',
-            'Brand': 'Brand',
-            'Regulatory': 'Regulatory',
-            'Legal': 'Legal',
-            'Usability': 'Usability',
-            
-            // AI Assistant
-            'AI Summary': 'AI Summary',
-            'AI Settings': 'AI Settings',
-            'ai_settings': 'AI Assistant',
-            'AI Assistant': 'AI Assistant',
-            'ai_backend_api': 'ChatGPT (API)',
-            'ChatGPT (API)': 'ChatGPT (API)',
-            'summary_label': 'Summary',
-            'Summary': 'Summary',
-            'summary_stats': 'AI stats – attempts: {{attempts}}, empty: {{empty}}, mode: {{mode}}, duration: {{duration}}ms',
-            
-            // OpenAI Configuration
-            'openai_info': 'Uses an OpenAI-compatible Chat Completions API. A browser call usually requires a CORS-enabled proxy.',
-            'openai_model': 'OpenAI model',
-            'OpenAI Model': 'OpenAI model',
-            'Model': 'Model',
-            'openai_base_url': 'OpenAI base URL',
-            'Base URL': 'Base URL',
-            'openai_api_key': 'OpenAI API key',
-            'API Key': 'API Key',
-            'openai_missing_key': 'OpenAI API key is missing.',
-            'API Key Status': 'API Key Status',
-            'Configured': 'Configured',
-            'Not configured': 'Not configured',
-            
-            // Translation
-            'Auto-translate DQM results': 'Auto-translate DQM results',
-            'translation_enable': 'Auto-translate DQM results',
-            'AI summary card': 'AI summary card',
-            'summary_enable': 'AI summary card',
-            'ai_model_hint': 'Model choice affects translation and summary quality/speed.',
-            'translation_not_needed': 'UI language is English; translation is not needed.',
-            'translation_target_lang': 'Target language: {{lang}}',
-            'translation_when': 'AI features run automatically after an analysis completes, when you change the UI language, or when you enable them here.',
-            'ai_limitations': 'AI can be wrong or hallucinate – please verify results.',
-            'summary_api_only': 'AI features use ChatGPT (API) for translation and summaries.',
-            'summary_disclaimer': 'Note: Summaries may contain errors or hallucinations. Please verify.',
-            'translation_full_power': 'Full translation (may take longer)',
-            'translation_model': 'Model: {{model}}',
-            'translation_downloading': 'Initializing AI…',
-            'translation_translating': 'Translating results…',
-            'Translating...': 'Translating...',
-            'translation_progress': '{{done}} / {{total}} checkpoints',
-            'translation_ready': 'Translation is ready.',
-            'translation_partial': 'Translation stopped early to keep performance snappy. Some items remain untranslated.',
-            'translation_incomplete': 'Some items could not be translated reliably and remain unchanged.',
-            'translation_restart': 'Translate missing items',
-            'Translate missing items': 'Translate missing items',
-            'Translation is enabled and working': 'Translation is enabled and working',
-            'Translation completed': 'Translation completed',
-            'Translation failed': 'Translation failed',
-            'checkpoints translated': 'checkpoints translated',
-            
-            // AI Summary
-            'summary_restart': 'Restart summary',
-            'Restart summary': 'Restart summary',
-            'summary_title': 'AI Summary',
-            'summary_regenerate': 'Regenerate',
-            'Regenerate': 'Regenerate',
-            'summary_generating': 'Generating summary…',
-            'Generating AI summary...': 'Generating AI summary...',
-            'summary_failed': 'Summary failed',
-            'Failed to generate AI summary': 'Failed to generate AI summary',
-            'Failed to generate summary': 'Failed to generate summary',
-            'summary_empty': 'No summary available yet.',
-            'No critical issues to summarize': 'No critical issues to summarize',
-            'summary_disabled': 'Enable the AI summary in the AI Assistant settings to get an executive overview of the most important issues.',
-            'Cached': 'Cached',
-            'AI-generated summary may contain errors. Please verify.': 'AI-generated summary may contain errors. Please verify.',
-            'AI may generate incorrect or misleading information. Always verify results.': 'AI may generate incorrect or misleading information. Always verify results.',
-            'AI may hallucinate or provide inaccurate information. Review results carefully.': 'AI may hallucinate or provide inaccurate information. Review results carefully.',
-            
-            // Settings
-            'AI Assistant Settings': 'AI Assistant Settings',
-            'Status': 'Status',
-            'Enabled': 'Enabled',
-            'Disabled': 'Disabled',
-            'Cache': 'Cache',
-            'cached summaries': 'cached summaries',
-            'Clear Cache': 'Clear Cache',
-            'Clear AI cache': 'Clear AI cache',
-            'ai_cache_clear': 'Clear AI cache',
-            'ai_cache_cleared': 'Cleared!',
-            'ai_cache_badge': 'Cached',
-            'Cleared!': 'Cleared!',
-            'Cached': 'Cached',
-            'To change AI settings, visit': 'To change AI settings, visit',
-            'Plugin Settings': 'Plugin Settings',
-            'API': 'API',
-            'When enabled, checkpoint names and descriptions are translated based on your DQM language setting.': 'When enabled, checkpoint names and descriptions are translated based on your DQM language setting.',
-            'Clear cached translations and AI summaries': 'Clear cached translations and AI summaries',
-            'Restart translation process for all checkpoints': 'Restart translation process for all checkpoints',
-            'Regenerate AI summary for current results': 'Regenerate AI summary for current results',
-            
-            // Auth errors
-            'dqm_disabled': 'DQM is disabled. Permission denied.',
-            'dqm_not_configured': 'DQM is not configured. Please provide API credentials via props, localStorage, or configure an authentication backend.'
-        },
-        de: {
-            // Header
-            'title': 'Digitale Qualität und Barrierefreiheit',
-            'ready_title': 'Bereit für Analyse',
-            'ready_body': 'Klicken Sie auf "Qualitätsprüfung starten", um die aktuelle Seite auf Barrierefreiheits- und Qualitätsprobleme zu prüfen.',
-            'Run Quality Check': 'Qualitätsprüfung starten',
-            'run_quality_check': 'Qualitätsprüfung starten',
-            'analyzing': 'Analyse läuft...',
-            'access_denied': 'Zugriff verweigert',
-            'config_required': 'Konfiguration erforderlich',
-            'auth_error': 'Authentifizierungsfehler',
-            'close_sidebar': 'Seitenleiste schließen',
-            'fab_tooltip': 'DQM Qualitätsanalyse',
-            'Filter by Topic:': 'Nach Thema filtern:',
-            'All Topics': 'Alle Themen',
-            
-            // Analysis results
-            'quality_overview': 'Gesamtqualität',
-            'Quality Overview': 'Gesamtqualität',
-            'overall_quality': 'Gesamtqualität',
-            'Quality Breakdown': 'Qualitätsübersicht',
-            'quality_breakdown': 'Qualitätsübersicht',
-            'all_passed': 'Alle bestanden',
-            'x_of_y_passed': '{{passed}} von {{total}} bestanden',
-            'percent_passed': '{{percent}}% bestanden',
-            'passed': 'bestanden',
-            'Passed': 'Bestanden',
-            'failed': 'Fehlgeschlagen',
-            'Failed': 'Fehlgeschlagen',
-            'show_all_errors': 'Seite mit allen Fehlern anzeigen',
-            
-            // Failed checkpoints
-            'failed_checkpoints_title': 'Fehlgeschlagene Prüfpunkte',
-            'Failed Checkpoints': 'Fehlgeschlagene Prüfpunkte',
-            'failed_checkpoints': 'Fehlgeschlagene Prüfpunkte',
-            'no_issues_found': 'Keine fehlgeschlagenen Prüfpunkte gefunden!',
-            'no_issues_for_topic': 'Keine fehlgeschlagenen Prüfpunkte für dieses Thema gefunden.',
-            'filter_by_category': 'Nach Kategorie filtern',
-            'showing_categories': '{{count}} von {{total}} Kategorien angezeigt',
-            'showing_all_categories': 'Alle {{total}} Kategorien angezeigt',
-            'show_all': 'Alle anzeigen',
-            'Cannot highlight': 'Kann nicht hervorheben',
-            'Click to highlight': 'Zum Hervorheben klicken',
-            'view_in_browser': 'Im Browser anzeigen',
-            'view_source': 'Quellcode anzeigen',
-            'No topics found': 'Keine Themen gefunden',
-            'No checkpoints found.': 'Keine Prüfpunkte gefunden.',
-            'No failed checkpoints found!': 'Keine fehlgeschlagenen Prüfpunkte gefunden!',
-            'No failed checkpoints found for this topic.': 'Keine fehlgeschlagenen Prüfpunkte für dieses Thema gefunden.',
-            
-            // Error states
-            'Error loading topics': 'Fehler beim Laden der Themen',
-            'Error loading checkpoints.': 'Fehler beim Laden der Prüfpunkte.',
-            'Loading errors...': 'Lade Fehler...',
-            'Detailed Errors': 'Detaillierte Fehler',
-            'No errors found!': 'Keine Fehler gefunden!',
-            'analysis_failed': 'Analyse fehlgeschlagen',
-            'no_highlighted_content': 'Kein hervorgehobener Inhalt verfügbar.',
-            'failed_load_browser': 'Browseransicht konnte nicht geladen werden. Bitte erneut versuchen.',
-            'failed_load_highlights': 'Hervorgehobene Inhalte konnten nicht geladen werden. Bitte erneut versuchen.',
-            'failed_load_source': 'Quellansicht konnte nicht geladen werden. Bitte erneut versuchen.',
-            'failed_load_all_errors': 'Seite mit allen Fehlern konnte nicht geladen werden. Bitte erneut versuchen.',
-            'loading_views': 'Beide Ansichten werden geladen...',
-            
-            // Highlight modal
-            'highlighted_errors': 'Hervorgehobene Fehler',
-            'browser_view': 'Browseransicht',
-            'source_view': 'Quellansicht',
-            'x_of_y': '{{current}} von {{total}}',
-            'prev_highlight': 'Vorheriger Fehler',
-            'next_highlight': 'Nächster Fehler',
-            'reload_highlights': 'Hervorhebungen neu laden',
-            'open_in_new_tab': 'In neuem Tab öffnen',
-            'enable_js': 'JavaScript aktivieren',
-            'disable_js': 'JavaScript deaktivieren',
-            'no_source_content': 'Kein Quellcode für diesen Prüfpunkt verfügbar.',
-            
-            // Spellcheck
-            'Spellcheck Results': 'Rechtschreibprüfungsergebnisse',
-            'occurrence': 'Vorkommen',
-            'No spelling issues found!': 'Keine Rechtschreibprobleme gefunden!',
-            
-            // Navigation
-            'Source': 'Quelle',
-            'Browser': 'Browser',
-            'Close': 'Schließen',
-            'Topics: ': 'Themen: ',
-            'Retry': 'Wiederholen',
-            
-            'Accessibility': 'Barrierefreiheit',
-            'SEO': 'SEO',
-            'Brand': 'Marke',
-            'Regulatory': 'Vorschriften',
-            'Legal': 'Rechtliches',
-            'Usability': 'Benutzerfreundlichkeit',
-            
-            // AI Assistant
-            'AI Summary': 'KI-Zusammenfassung',
-            'AI Settings': 'KI-Einstellungen',
-            'ai_settings': 'KI-Assistent',
-            'AI Assistant': 'KI-Assistent',
-            'ai_backend_api': 'ChatGPT (API)',
-            'ChatGPT (API)': 'ChatGPT (API)',
-            'summary_label': 'Zusammenfassung',
-            'Summary': 'Zusammenfassung',
-            'summary_stats': 'KI-Statistik – Versuche: {{attempts}}, leer: {{empty}}, Modus: {{mode}}, Dauer: {{duration}}ms',
-            
-            // OpenAI Configuration
-            'openai_info': 'Nutzt eine OpenAI-kompatible Chat-Completions-API. Ein Browser-Aufruf benötigt meist einen CORS-fähigen Proxy.',
-            'openai_model': 'OpenAI-Modell',
-            'OpenAI Model': 'OpenAI-Modell',
-            'Model': 'Modell',
-            'openai_base_url': 'OpenAI Base-URL',
-            'Base URL': 'Basis-URL',
-            'openai_api_key': 'OpenAI API-Key',
-            'API Key': 'API-Schlüssel',
-            'openai_missing_key': 'OpenAI API-Key fehlt.',
-            'API Key Status': 'API-Schlüssel Status',
-            'Configured': 'Konfiguriert',
-            'Not configured': 'Nicht konfiguriert',
-            
-            // Translation
-            'Auto-translate DQM results': 'DQM-Ergebnisse automatisch übersetzen',
-            'translation_enable': 'DQM-Ergebnisse automatisch übersetzen',
-            'AI summary card': 'KI-Zusammenfassung',
-            'summary_enable': 'KI-Zusammenfassung',
-            'ai_model_hint': 'Die Modellauswahl beeinflusst Übersetzung und Zusammenfassung (Qualität/Tempo).',
-            'translation_not_needed': 'Die UI-Sprache ist Englisch; eine Übersetzung ist nicht nötig.',
-            'translation_target_lang': 'Zielsprache: {{lang}}',
-            'translation_when': 'KI-Funktionen laufen automatisch nach Abschluss der Analyse, beim Wechsel der UI-Sprache oder sobald Sie sie hier aktivieren.',
-            'ai_limitations': 'KI kann sich irren oder halluzinieren – bitte Ergebnisse prüfen.',
-            'summary_api_only': 'KI-Funktionen nutzen ChatGPT (API) für Übersetzungen und Zusammenfassungen.',
-            'summary_disclaimer': 'Hinweis: Zusammenfassungen können Fehler oder Halluzinationen enthalten. Bitte fachlich prüfen.',
-            'translation_full_power': 'Vollständige Übersetzung (kann länger dauern)',
-            'translation_model': 'Modell: {{model}}',
-            'translation_downloading': 'KI wird initialisiert…',
-            'translation_translating': 'Ergebnisse werden übersetzt…',
-            'Translating...': 'Übersetze...',
-            'translation_progress': '{{done}} / {{total}} Prüfpunkte',
-            'translation_ready': 'Übersetzung ist bereit.',
-            'translation_partial': 'Die Übersetzung wurde vorzeitig beendet, um die Performance hoch zu halten. Einige Inhalte bleiben unübersetzt.',
-            'translation_incomplete': 'Einige Inhalte konnten nicht zuverlässig übersetzt werden und bleiben unverändert.',
-            'translation_restart': 'Fehlende Übersetzungen nachholen',
-            'Translate missing items': 'Fehlende Elemente übersetzen',
-            'Translation is enabled and working': 'Übersetzung ist aktiviert und funktioniert',
-            'Translation completed': 'Übersetzung abgeschlossen',
-            'Translation failed': 'Übersetzung fehlgeschlagen',
-            'checkpoints translated': 'Prüfpunkte übersetzt',
-            
-            // AI Summary
-            'summary_restart': 'Zusammenfassung neu starten',
-            'Restart summary': 'Zusammenfassung neu starten',
-            'summary_title': 'KI-Zusammenfassung',
-            'summary_regenerate': 'Neu generieren',
-            'Regenerate': 'Neu generieren',
-            'summary_generating': 'Zusammenfassung wird erstellt…',
-            'Generating AI summary...': 'Erstelle KI-Zusammenfassung...',
-            'summary_failed': 'Zusammenfassung fehlgeschlagen',
-            'Failed to generate AI summary': 'KI-Zusammenfassung konnte nicht erstellt werden',
-            'Failed to generate summary': 'Zusammenfassung konnte nicht erstellt werden',
-            'summary_empty': 'Noch keine Zusammenfassung verfügbar.',
-            'No critical issues to summarize': 'Keine kritischen Probleme zum Zusammenfassen',
-            'summary_disabled': 'Aktivieren Sie die KI-Zusammenfassung in den KI-Assistent-Einstellungen, um eine kompakte Übersicht der wichtigsten Punkte zu erhalten.',
-            'Cached': 'Zwischengespeichert',
-            'AI-generated summary may contain errors. Please verify.': 'KI-generierte Zusammenfassung kann Fehler enthalten. Bitte überprüfen.',
-            'AI may generate incorrect or misleading information. Always verify results.': 'KI kann falsche oder irreführende Informationen generieren. Ergebnisse immer überprüfen.',
-            'AI may hallucinate or provide inaccurate information. Review results carefully.': 'KI kann halluzinieren oder ungenaue Informationen liefern. Überprüfen Sie die Ergebnisse sorgfältig.',
-            
-            // Settings
-            'AI Assistant Settings': 'KI-Assistent Einstellungen',
-            'Status': 'Status',
-            'Enabled': 'Aktiviert',
-            'Disabled': 'Deaktiviert',
-            'Cache': 'Cache',
-            'cached summaries': 'zwischengespeicherte Zusammenfassungen',
-            'Clear Cache': 'Cache leeren',
-            'Clear AI cache': 'KI-Cache leeren',
-            'ai_cache_clear': 'KI-Cache löschen',
-            'ai_cache_cleared': 'Geleert!',
-            'ai_cache_badge': 'Zwischengespeichert',
-            'Cleared!': 'Geleert!',
-            'Cached': 'Zwischengespeichert',
-            'To change AI settings, visit': 'Um KI-Einstellungen zu ändern, besuchen Sie',
-            'Plugin Settings': 'Plugin-Einstellungen',
-            'API': 'API',
-            'When enabled, checkpoint names and descriptions are translated based on your DQM language setting.': 'Wenn aktiviert, werden Prüfpunkt-Namen und -Beschreibungen basierend auf Ihrer DQM-Spracheinstellung übersetzt.',
-            'Clear cached translations and AI summaries': 'Zwischengespeicherte Übersetzungen und KI-Zusammenfassungen löschen',
-            'Restart translation process for all checkpoints': 'Übersetzungsprozess für alle Prüfpunkte neu starten',
-            'Regenerate AI summary for current results': 'KI-Zusammenfassung für aktuelle Ergebnisse neu generieren',
-            
-            // Auth errors
-            'dqm_disabled': 'DQM ist deaktiviert. Zugriff verweigert.',
-            'dqm_not_configured': 'DQM ist nicht konfiguriert. Bitte geben Sie API-Zugangsdaten über Props, localStorage oder ein Authentifizierungs-Backend an.'
-        },
-        es: {
-            // Header
-            'title': 'Calidad digital y accesibilidad',
-            'ready_title': 'Listo para analizar',
-            'ready_body': 'Haz clic en "Ejecutar comprobación de calidad" para analizar la página actual en busca de problemas de accesibilidad y calidad.',
-            'Run Quality Check': 'Ejecutar comprobación de calidad',
-            'run_quality_check': 'Ejecutar comprobación de calidad',
-            'analyzing': 'Analizando...',
-            'access_denied': 'Acceso denegado',
-            'config_required': 'Configuración requerida',
-            'auth_error': 'Error de autenticación',
-            'close_sidebar': 'Cerrar barra lateral',
-            'fab_tooltip': 'Análisis de calidad DQM',
-            'Filter by Topic:': 'Filtrar por tema:',
-            'All Topics': 'Todos los temas',
-            
-            // Analysis results
-            'quality_overview': 'Calidad general',
-            'Quality Overview': 'Calidad general',
-            'overall_quality': 'Calidad general',
-            'Quality Breakdown': 'Desglose de calidad',
-            'quality_breakdown': 'Desglose de calidad',
-            'all_passed': 'Todo aprobado',
-            'x_of_y_passed': '{{passed}} de {{total}} aprobados',
-            'percent_passed': '{{percent}}% aprobados',
-            'passed': 'aprobado',
-            'Passed': 'Aprobado',
-            'failed': 'Fallido',
-            'Failed': 'Fallido',
-            'show_all_errors': 'Mostrar página con todos los errores',
-            
-            // Failed checkpoints
-            'failed_checkpoints_title': 'Checkpoints fallidos',
-            'Failed Checkpoints': 'Checkpoints fallidos',
-            'failed_checkpoints': 'Checkpoints fallidos',
-            'no_issues_found': '¡No se encontraron checkpoints fallidos!',
-            'no_issues_for_topic': 'No se encontraron checkpoints fallidos para este tema.',
-            'filter_by_category': 'Filtrar por categoría',
-            'showing_categories': 'Mostrando {{count}} de {{total}} categorías',
-            'showing_all_categories': 'Mostrando todas las {{total}} categorías',
-            'show_all': 'Mostrar todo',
-            'Cannot highlight': 'No se puede resaltar',
-            'Click to highlight': 'Haga clic para resaltar',
-            'view_in_browser': 'Ver en el navegador',
-            'view_source': 'Ver fuente',
-            'No topics found': 'No se encontraron temas',
-            'No checkpoints found.': 'No se encontraron checkpoints.',
-            'No failed checkpoints found!': '¡No se encontraron checkpoints fallidos!',
-            'No failed checkpoints found for this topic.': 'No se encontraron checkpoints fallidos para este tema.',
-            
-            // Error states
-            'Error loading topics': 'Error al cargar temas',
-            'Error loading checkpoints.': 'Error al cargar checkpoints.',
-            'Loading errors...': 'Cargando errores...',
-            'Detailed Errors': 'Errores detallados',
-            'No errors found!': '¡No se encontraron errores!',
-            'analysis_failed': 'El análisis falló',
-            'no_highlighted_content': 'No hay contenido resaltado disponible.',
-            'failed_load_browser': 'No se pudo cargar la vista del navegador. Inténtalo de nuevo.',
-            'failed_load_highlights': 'No se pudo cargar el contenido resaltado. Inténtalo de nuevo.',
-            'failed_load_source': 'No se pudo cargar la vista de fuente. Inténtalo de nuevo.',
-            'failed_load_all_errors': 'No se pudo cargar la página con todos los errores. Inténtalo de nuevo.',
-            'loading_views': 'Cargando ambas vistas...',
-            
-            // Highlight modal
-            'highlighted_errors': 'Errores resaltados',
-            'browser_view': 'Vista del navegador',
-            'source_view': 'Vista de fuente',
-            'x_of_y': '{{current}} de {{total}}',
-            'prev_highlight': 'Resaltado anterior',
-            'next_highlight': 'Siguiente resaltado',
-            'reload_highlights': 'Recargar resaltados',
-            'open_in_new_tab': 'Abrir en una pestaña nueva',
-            'enable_js': 'Habilitar JavaScript',
-            'disable_js': 'Deshabilitar JavaScript',
-            'no_source_content': 'No hay contenido de fuente disponible para este checkpoint.',
-            
-            // Spellcheck
-            'Spellcheck Results': 'Resultados de ortografía',
-            'occurrence': 'ocurrencia',
-            'No spelling issues found!': '¡No se encontraron problemas de ortografía!',
-            
-            // Navigation
-            'Source': 'Fuente',
-            'Browser': 'Navegador',
-            'Close': 'Cerrar',
-            'Topics: ': 'Temas: ',
-            'Retry': 'Reintentar',
-            
-            'Accessibility': 'Accesibilidad',
-            'SEO': 'SEO',
-            'Brand': 'Marca',
-            'Regulatory': 'Regulatorio',
-            'Legal': 'Legal',
-            'Usability': 'Usabilidad',
-            
-            // AI Assistant
-            'AI Summary': 'Resumen de IA',
-            'AI Settings': 'Configuración de IA',
-            'ai_settings': 'Asistente de IA',
-            'AI Assistant': 'Asistente de IA',
-            'ai_backend_api': 'ChatGPT (API)',
-            'ChatGPT (API)': 'ChatGPT (API)',
-            'summary_label': 'Resumen',
-            'Summary': 'Resumen',
-            'summary_stats': 'Estadísticas IA – intentos: {{attempts}}, vacías: {{empty}}, modo: {{mode}}, duración: {{duration}}ms',
-            
-            // OpenAI Configuration
-            'openai_info': 'Usa una API compatible con OpenAI Chat Completions. Normalmente, una llamada desde el navegador requiere un proxy con CORS.',
-            'openai_model': 'Modelo de OpenAI',
-            'OpenAI Model': 'Modelo de OpenAI',
-            'Model': 'Modelo',
-            'openai_base_url': 'URL base de OpenAI',
-            'Base URL': 'URL base',
-            'openai_api_key': 'Clave API de OpenAI',
-            'API Key': 'Clave API',
-            'openai_missing_key': 'Falta la clave API de OpenAI.',
-            'API Key Status': 'Estado de la clave API',
-            'Configured': 'Configurado',
-            'Not configured': 'No configurado',
-            
-            // Translation
-            'Auto-translate DQM results': 'Traducir automáticamente resultados DQM',
-            'translation_enable': 'Traducir automáticamente los resultados de DQM',
-            'AI summary card': 'Tarjeta de resumen de IA',
-            'summary_enable': 'Tarjeta de resumen de IA',
-            'ai_model_hint': 'La elección del modelo afecta la traducción y el resumen (calidad/velocidad).',
-            'translation_not_needed': 'El idioma de la interfaz es inglés; no es necesario traducir.',
-            'translation_target_lang': 'Idioma de destino: {{lang}}',
-            'translation_when': 'Las funciones de IA se ejecutan automáticamente al finalizar un análisis, al cambiar el idioma de la UI o al activarlas aquí.',
-            'ai_limitations': 'La IA puede equivocarse o alucinar; verifica los resultados.',
-            'summary_api_only': 'Las funciones de IA utilizan ChatGPT (API) para traducciones y resúmenes.',
-            'summary_disclaimer': 'Nota: los resúmenes pueden contener errores o alucinaciones. Verifica el contenido.',
-            'translation_full_power': 'Traducción completa (puede tardar más)',
-            'translation_model': 'Modelo: {{model}}',
-            'translation_downloading': 'Inicializando IA…',
-            'translation_translating': 'Traduciendo resultados…',
-            'Translating...': 'Traduciendo...',
-            'translation_progress': '{{done}} / {{total}} checkpoints',
-            'translation_ready': 'La traducción está lista.',
-            'translation_partial': 'La traducción se detuvo antes para mantener un buen rendimiento. Algunos elementos quedan sin traducir.',
-            'translation_incomplete': 'Algunos elementos no se pudieron traducir de forma fiable y permanecen sin cambios.',
-            'translation_restart': 'Traducir elementos faltantes',
-            'Translate missing items': 'Traducir elementos faltantes',
-            'Translation is enabled and working': 'La traducción está habilitada y funcionando',
-            'Translation completed': 'Traducción completada',
-            'Translation failed': 'Traducción fallida',
-            'checkpoints translated': 'checkpoints traducidos',
-            
-            // AI Summary
-            'summary_restart': 'Reiniciar resumen',
-            'Restart summary': 'Reiniciar resumen',
-            'summary_title': 'Resumen de IA',
-            'summary_regenerate': 'Regenerar',
-            'Regenerate': 'Regenerar',
-            'summary_generating': 'Generando resumen…',
-            'Generating AI summary...': 'Generando resumen de IA...',
-            'summary_failed': 'Falló el resumen',
-            'Failed to generate AI summary': 'No se pudo generar el resumen de IA',
-            'Failed to generate summary': 'No se pudo generar el resumen',
-            'summary_empty': 'Aún no hay resumen disponible.',
-            'No critical issues to summarize': 'No hay problemas críticos para resumir',
-            'summary_disabled': 'Activa el resumen de IA en los ajustes del asistente para obtener una visión general de los puntos más importantes.',
-            'Cached': 'En caché',
-            'AI-generated summary may contain errors. Please verify.': 'El resumen generado por IA puede contener errores. Por favor verifique.',
-            'AI may generate incorrect or misleading information. Always verify results.': 'La IA puede generar información incorrecta o engañosa. Siempre verifique los resultados.',
-            'AI may hallucinate or provide inaccurate information. Review results carefully.': 'La IA puede alucinar o proporcionar información inexacta. Revise los resultados cuidadosamente.',
-            
-            // Settings
-            'AI Assistant Settings': 'Configuración del Asistente de IA',
-            'Status': 'Estado',
-            'Enabled': 'Habilitado',
-            'Disabled': 'Deshabilitado',
-            'Cache': 'Caché',
-            'cached summaries': 'resúmenes en caché',
-            'Clear Cache': 'Limpiar caché',
-            'Clear AI cache': 'Limpiar caché de IA',
-            'ai_cache_clear': 'Borrar caché de IA',
-            'ai_cache_cleared': '¡Limpiado!',
-            'ai_cache_badge': 'En caché',
-            'Cleared!': '¡Limpiado!',
-            'Cached': 'En caché',
-            'To change AI settings, visit': 'Para cambiar la configuración de IA, visite',
-            'Plugin Settings': 'Configuración del plugin',
-            'API': 'API',
-            'When enabled, checkpoint names and descriptions are translated based on your DQM language setting.': 'Cuando está habilitado, los nombres y descripciones de los checkpoints se traducen según la configuración de idioma de DQM.',
-            'Clear cached translations and AI summaries': 'Borrar traducciones en caché y resúmenes de IA',
-            'Restart translation process for all checkpoints': 'Reiniciar el proceso de traducción para todos los checkpoints',
-            'Regenerate AI summary for current results': 'Regenerar resumen de IA para resultados actuales',
-            
-            // Auth errors
-            'dqm_disabled': 'DQM está deshabilitado. Permiso denegado.',
-            'dqm_not_configured': 'DQM no está configurado. Proporciona credenciales de API vía props, localStorage o configura un backend de autenticación.'
+        en: null,
+        de: null,
+        es: null,
+        
+        loadLanguageFile: loadLanguageFile,
+        initializeTranslations: initializeTranslations,
+        getTranslation: getTranslation,
+        setCurrentLocale: setCurrentLocale,
+        getCurrentLocale: getCurrentLocale,
+        getAvailableLocales: getAvailableLocales,
+        
+        get loaded() {
+            return loadedTranslations;
         }
     };
+
+    Object.defineProperty(window.DQM_I18N, 'en', {
+        get: function() {
+            return loadedTranslations.en || {};
+        },
+        enumerable: true
+    });
+
+    Object.defineProperty(window.DQM_I18N, 'de', {
+        get: function() {
+            return loadedTranslations.de || {};
+        },
+        enumerable: true
+    });
+
+    Object.defineProperty(window.DQM_I18N, 'es', {
+        get: function() {
+            return loadedTranslations.es || {};
+        },
+        enumerable: true
+    });
 
 })(window);

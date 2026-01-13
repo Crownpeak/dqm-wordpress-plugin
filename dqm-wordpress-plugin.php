@@ -249,9 +249,17 @@ class DQMWordPressPlugin
         );
         
         wp_enqueue_script(
+            'dqm-ai-context',
+            CROWNPEAK_DQM_PLUGIN_URL . 'ai-context.js',
+            array(),
+            CROWNPEAK_DQM_VERSION,
+            true
+        );
+        
+        wp_enqueue_script(
             'dqm-ai-helpers',
             CROWNPEAK_DQM_PLUGIN_URL . 'ai-helpers.js',
-            array(),
+            array('dqm-ai-context'),
             CROWNPEAK_DQM_VERSION,
             true
         );
@@ -259,7 +267,7 @@ class DQMWordPressPlugin
         wp_enqueue_script(
             'dqm-ai-translation-manager',
             CROWNPEAK_DQM_PLUGIN_URL . 'ai-translation-manager.js',
-            array('dqm-ai-helpers'),
+            array('dqm-ai-context', 'dqm-ai-helpers'),
             CROWNPEAK_DQM_VERSION,
             true
         );
@@ -267,13 +275,14 @@ class DQMWordPressPlugin
         wp_enqueue_script(
             'dqm-wordpress-plugin-gutenberg',
             CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-gutenberg.js',
-            array('wp-element', 'wp-edit-post', 'wp-plugins', 'wp-components', 'wp-data', 'wp-i18n', 'dqm-wordpress-plugin-i18n', 'dqm-ai-helpers', 'dqm-ai-translation-manager'),
+            array('wp-element', 'wp-edit-post', 'wp-plugins', 'wp-components', 'wp-data', 'wp-i18n', 'dqm-wordpress-plugin-i18n', 'dqm-ai-context', 'dqm-ai-helpers', 'dqm-ai-translation-manager'),
             CROWNPEAK_DQM_VERSION,
             true
         );
         wp_set_script_translations('dqm-wordpress-plugin-gutenberg', 'dqm-wordpress-plugin', CROWNPEAK_DQM_PLUGIN_PATH . 'languages');
         wp_localize_script('dqm-wordpress-plugin-gutenberg', 'CrownpeakDQM', array(
             'ajaxurl' => admin_url('admin-ajax.php'),
+            'pluginUrl' => plugin_dir_url(__FILE__),
             'apiKey' => get_option('crownpeak_dqm_api_key', ''),
             'openaiApiKey' => get_option('crownpeak_dqm_openai_api_key', ''),
             'openaiModel' => get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'),
