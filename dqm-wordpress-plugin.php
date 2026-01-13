@@ -36,6 +36,8 @@ class DQMWordPressPlugin
         add_action('wp_ajax_crownpeak_dqm_spellcheck', 'crownpeak_dqm_spellcheck_handler');
         add_action('wp_ajax_nopriv_crownpeak_dqm_spellcheck', 'crownpeak_dqm_spellcheck_handler');
         add_action('wp_ajax_crownpeak_dqm_ai_summary', 'crownpeak_dqm_ai_summary_handler');
+        add_action('wp_ajax_crownpeak_dqm_translate', 'crownpeak_dqm_translate_handler');
+        add_action('wp_ajax_crownpeak_dqm_clear_translation_cache', 'crownpeak_dqm_clear_translation_cache_handler');
     }
 
     public function init()
@@ -79,7 +81,8 @@ class DQMWordPressPlugin
         register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_website_id');
         register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_openai_api_key');
         register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_openai_model');
-        register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_ai_summary_enabled');
+        register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_openai_base_url');
+        register_setting('crownpeak_dqm_settings', 'crownpeak_dqm_reasoning_effort');
     }
 
     public function admin_page()
@@ -100,9 +103,10 @@ class DQMWordPressPlugin
                         <?php settings_fields('crownpeak_dqm_settings'); ?>
                         
                         <!-- Hidden fields to preserve AI settings when saving CMS configuration -->
-                        <input type="hidden" name="crownpeak_dqm_ai_summary_enabled" value="<?php echo esc_attr(get_option('crownpeak_dqm_ai_summary_enabled', '0')); ?>" />
                         <input type="hidden" name="crownpeak_dqm_openai_api_key" value="<?php echo esc_attr(get_option('crownpeak_dqm_openai_api_key', '')); ?>" />
                         <input type="hidden" name="crownpeak_dqm_openai_model" value="<?php echo esc_attr(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini')); ?>" />
+                        <input type="hidden" name="crownpeak_dqm_openai_base_url" value="<?php echo esc_attr(get_option('crownpeak_dqm_openai_base_url', 'https://api.openai.com/v1')); ?>" />
+                        <input type="hidden" name="crownpeak_dqm_reasoning_effort" value="<?php echo esc_attr(get_option('crownpeak_dqm_reasoning_effort', 'medium')); ?>" />
 
                         <div class="form-group">
                             <label class="form-label" for="crownpeak_dqm_api_key">
@@ -145,7 +149,7 @@ class DQMWordPressPlugin
                 <div class="card" style="margin-top: 24px;">
                     <h3><?php _e('AI Assistant Configuration', 'dqm-wordpress-plugin'); ?></h3>
                     <p style="color:#666;margin-bottom:16px;">
-                        <?php _e('Enable AI-powered summaries of quality check results using OpenAI.', 'dqm-wordpress-plugin'); ?>
+                        <?php _e('Configure OpenAI API settings. AI features (translation, summary) can be toggled on/off in the Gutenberg editor.', 'dqm-wordpress-plugin'); ?>
                     </p>
 
                     <form method="post" action="options.php">
@@ -154,20 +158,6 @@ class DQMWordPressPlugin
                         <!-- Hidden fields to preserve CMS configuration when saving AI settings -->
                         <input type="hidden" name="crownpeak_dqm_api_key" value="<?php echo esc_attr(get_option('crownpeak_dqm_api_key', '')); ?>" />
                         <input type="hidden" name="crownpeak_dqm_website_id" value="<?php echo esc_attr(get_option('crownpeak_dqm_website_id', '')); ?>" />
-
-                        <div class="form-group">
-                            <label class="form-label">
-                                <input
-                                    type="checkbox"
-                                    name="crownpeak_dqm_ai_summary_enabled"
-                                    value="1"
-                                    <?php checked(get_option('crownpeak_dqm_ai_summary_enabled', '0'), '1'); ?> />
-                                <?php _e('Enable AI Summary', 'dqm-wordpress-plugin'); ?>
-                            </label>
-                            <div class="form-help">
-                                <?php _e('Generate AI-powered bullet-point summaries of the most critical quality issues.', 'dqm-wordpress-plugin'); ?>
-                            </div>
-                        </div>
 
                         <div class="form-group">
                             <label class="form-label" for="crownpeak_dqm_openai_api_key">
@@ -186,20 +176,55 @@ class DQMWordPressPlugin
                         </div>
 
                         <div class="form-group">
+                            <label class="form-label" for="crownpeak_dqm_openai_base_url">
+                                <?php _e('OpenAI Base URL', 'dqm-wordpress-plugin'); ?>
+                            </label>
+                            <input
+                                type="text"
+                                id="crownpeak_dqm_openai_base_url"
+                                name="crownpeak_dqm_openai_base_url"
+                                value="<?php echo esc_attr(get_option('crownpeak_dqm_openai_base_url', 'https://api.openai.com/v1')); ?>"
+                                class="form-input"
+                                placeholder="https://api.openai.com/v1" />
+                            <div class="form-help">
+                                <?php _e('OpenAI-compatible API base URL. Use default for OpenAI or custom for proxies.', 'dqm-wordpress-plugin'); ?>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
                             <label class="form-label" for="crownpeak_dqm_openai_model">
                                 <?php _e('OpenAI Model', 'dqm-wordpress-plugin'); ?>
                             </label>
                             <select
                                 id="crownpeak_dqm_openai_model"
                                 name="crownpeak_dqm_openai_model"
-                                class="form-input">
+                                class="form-input"
+                                onchange="document.getElementById('reasoning_effort_section').style.display = this.value.startsWith('gpt-5') ? 'block' : 'none';">
+                                <option value="gpt-5.2" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-5.2'); ?>>gpt-5.2 🆕</option>
                                 <option value="gpt-4o-mini" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4o-mini'); ?>>gpt-4o-mini (Recommended)</option>
                                 <option value="gpt-4o" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4o'); ?>>gpt-4o</option>
-                                <option value="gpt-4-turbo" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4-turbo'); ?>>gpt-4-turbo</option>
-                                <option value="gpt-3.5-turbo" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-3.5-turbo'); ?>>gpt-3.5-turbo</option>
+                                <option value="gpt-4.1-mini" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4.1-mini'); ?>>gpt-4.1-mini</option>
+                                <option value="gpt-4.1" <?php selected(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-4.1'); ?>>gpt-4.1</option>
                             </select>
                             <div class="form-help">
-                                <?php _e('Choose the OpenAI model for AI summary generation. gpt-4o-mini offers the best balance of cost and quality.', 'dqm-wordpress-plugin'); ?>
+                                <?php _e('Choose the OpenAI model for AI features. gpt-4o-mini offers the best balance of cost and quality.', 'dqm-wordpress-plugin'); ?>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="reasoning_effort_section" style="display: <?php echo (strpos(get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'), 'gpt-5') === 0) ? 'block' : 'none'; ?>;">
+                            <label class="form-label" for="crownpeak_dqm_reasoning_effort">
+                                <?php _e('🧠 Reasoning Effort (GPT-5 only)', 'dqm-wordpress-plugin'); ?>
+                            </label>
+                            <select
+                                id="crownpeak_dqm_reasoning_effort"
+                                name="crownpeak_dqm_reasoning_effort"
+                                class="form-input">
+                                <option value="low" <?php selected(get_option('crownpeak_dqm_reasoning_effort', 'medium'), 'low'); ?>>Fast - Quick responses, lower cost</option>
+                                <option value="medium" <?php selected(get_option('crownpeak_dqm_reasoning_effort', 'medium'), 'medium'); ?>>Balanced - Good quality and speed</option>
+                                <option value="high" <?php selected(get_option('crownpeak_dqm_reasoning_effort', 'medium'), 'high'); ?>>Thorough - Best quality, slower</option>
+                            </select>
+                            <div class="form-help">
+                                <?php _e('Controls how thoroughly GPT-5 analyzes content. Only applies to GPT-5 models.', 'dqm-wordpress-plugin'); ?>
                             </div>
                         </div>
 
@@ -224,9 +249,25 @@ class DQMWordPressPlugin
         );
         
         wp_enqueue_script(
+            'dqm-ai-helpers',
+            CROWNPEAK_DQM_PLUGIN_URL . 'ai-helpers.js',
+            array(),
+            CROWNPEAK_DQM_VERSION,
+            true
+        );
+        
+        wp_enqueue_script(
+            'dqm-ai-translation-manager',
+            CROWNPEAK_DQM_PLUGIN_URL . 'ai-translation-manager.js',
+            array('dqm-ai-helpers'),
+            CROWNPEAK_DQM_VERSION,
+            true
+        );
+        
+        wp_enqueue_script(
             'dqm-wordpress-plugin-gutenberg',
             CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-gutenberg.js',
-            array('wp-element', 'wp-edit-post', 'wp-plugins', 'wp-components', 'wp-data', 'wp-i18n', 'dqm-wordpress-plugin-i18n'),
+            array('wp-element', 'wp-edit-post', 'wp-plugins', 'wp-components', 'wp-data', 'wp-i18n', 'dqm-wordpress-plugin-i18n', 'dqm-ai-helpers', 'dqm-ai-translation-manager'),
             CROWNPEAK_DQM_VERSION,
             true
         );
@@ -236,7 +277,8 @@ class DQMWordPressPlugin
             'apiKey' => get_option('crownpeak_dqm_api_key', ''),
             'openaiApiKey' => get_option('crownpeak_dqm_openai_api_key', ''),
             'openaiModel' => get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini'),
-            'aiSummaryEnabled' => get_option('crownpeak_dqm_ai_summary_enabled', '0'),
+            'openaiBaseUrl' => get_option('crownpeak_dqm_openai_base_url', 'https://api.openai.com/v1'),
+            'reasoningEffort' => get_option('crownpeak_dqm_reasoning_effort', 'medium'),
             'websiteId' => get_option('crownpeak_dqm_website_id', ''),
         ));
         wp_enqueue_style(
@@ -248,6 +290,12 @@ class DQMWordPressPlugin
         wp_enqueue_style(
             'dqm-wordpress-plugin-gutenberg-css',
             CROWNPEAK_DQM_PLUGIN_URL . 'dqm-wordpress-plugin-gutenberg.css',
+            array(),
+            CROWNPEAK_DQM_VERSION
+        );
+        wp_enqueue_style(
+            'dqm-ai-features-css',
+            CROWNPEAK_DQM_PLUGIN_URL . 'ai-features.css',
             array(),
             CROWNPEAK_DQM_VERSION
         );
@@ -504,21 +552,56 @@ function crownpeak_dqm_ai_summary_handler()
     $checkpoint_list = implode("\n", $checkpoint_details);
     $total_failed = count($failed_checkpoints);
     
-    $system_prompt = "You are a quality assurance expert analyzing web page quality issues. Provide a concise summary of the most critical issues in 3-7 bullet points. Focus on actionable insights and prioritize by severity.";
-    
-    $lang_instructions = [
-        'de' => 'Provide the summary in German.',
-        'es' => 'Provide the summary in Spanish.',
-        'en' => 'Provide the summary in English.'
+    $language_names = [
+        'en' => 'English',
+        'de' => 'German (Deutsch)',
+        'es' => 'Spanish (Español)'
     ];
     
-    $lang_instruction = isset($lang_instructions[$target_lang]) ? $lang_instructions[$target_lang] : $lang_instructions['en'];
+    $language_name = isset($language_names[$target_lang]) ? $language_names[$target_lang] : $language_names['en'];
+    
+    $language_specific_instruction = '';
+    if ($target_lang === 'de') {
+        $language_specific_instruction = ' Schreiben Sie auf Deutsch; vermeiden Sie Anglizismen, wenn möglich.';
+    } elseif ($target_lang === 'es') {
+        $language_specific_instruction = ' Escribe en español; evita anglicismos cuando sea posible.';
+    }
+    
+    $system_prompt = sprintf(
+        'You are an assistant that summarizes a website quality/accessibility report for developers. Write in %s (%s).%s Return 5–7 concise bullet points with the most important findings and next actions. Each bullet must be <= 140 characters. No prefixes like "Next step:" / "Nächster Schritt:". Base the summary on the checkpoint texts (name/description). Prefer actionable wording and group similar issues. Do not hallucinate; only use the provided data. Return JSON only.',
+        $language_name,
+        $target_lang,
+        $language_specific_instruction
+    );
+    
+    $payload = [
+        'failedCheckpoints' => array_map(function($cp) {
+            return [
+                'id' => $cp['id'] ?? '',
+                'name' => $cp['name'] ?? '',
+                'description' => $cp['description'] ?? ''
+            ];
+        }, array_values($failed_checkpoints)),
+        'siteName' => 'WordPress Site',
+        'failedCount' => $total_failed
+    ];
+    
+    $schema = json_encode([
+        'type' => 'object',
+        'properties' => [
+            'bullets' => [
+                'type' => 'array',
+                'items' => ['type' => 'string']
+            ]
+        ],
+        'required' => ['bullets'],
+        'additionalProperties' => false
+    ]);
     
     $user_prompt = sprintf(
-        "Analyze these %d failed quality checkpoints and provide a concise summary:\n\n%s\n\n%s Return only the bullet points without introduction.",
-        $total_failed,
-        $checkpoint_list,
-        $lang_instruction
+        "Payload: %s\n\nSchema (JSON): %s",
+        json_encode($payload),
+        $schema
     );
     
     $endpoint = 'https://api.openai.com/v1/chat/completions';
@@ -534,8 +617,9 @@ function crownpeak_dqm_ai_summary_handler()
                 ['role' => 'system', 'content' => $system_prompt],
                 ['role' => 'user', 'content' => $user_prompt]
             ],
-            'temperature' => 0.7,
-            'max_tokens' => 500,
+            'response_format' => ['type' => 'json_object'],
+            'temperature' => 0.3,
+            'max_tokens' => $target_lang === 'en' ? 384 : 512,
         ]),
         'timeout' => 60,
     ];
@@ -564,14 +648,24 @@ function crownpeak_dqm_ai_summary_handler()
     
     $summary = trim($data['choices'][0]['message']['content']);
     
-    $bullets = [];
-    $lines = explode("\n", $summary);
-    foreach ($lines as $line) {
-        $line = trim($line);
-        if (empty($line)) continue;
-        $line = preg_replace('/^[-*•]\s*/', '', $line);
-        if (!empty($line)) {
-            $bullets[] = $line;
+    $json_data = json_decode($summary, true);
+    if (json_last_error() === JSON_ERROR_NONE && isset($json_data['bullets']) && is_array($json_data['bullets'])) {
+        $bullets = array_map('trim', $json_data['bullets']);
+        $bullets = array_filter($bullets, function($b) {
+            return !empty($b);
+        });
+        $bullets = array_values($bullets);
+    } else {
+        $bullets = [];
+        $lines = explode("\n", $summary);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line)) continue;
+            $line = preg_replace('/^[-*•]\s*/', '', $line);
+            $line = preg_replace('/^\d+\.\s*/', '', $line);
+            if (!empty($line)) {
+                $bullets[] = $line;
+            }
         }
     }
     
@@ -589,3 +683,293 @@ function crownpeak_dqm_ai_summary_handler()
     ]);
     wp_die();
 }
+
+function crownpeak_dqm_translate_handler()
+{
+    $openai_api_key = get_option('crownpeak_dqm_openai_api_key', '');
+    $openai_model = get_option('crownpeak_dqm_openai_model', 'gpt-4o-mini');
+    $openai_base_url = get_option('crownpeak_dqm_openai_base_url', 'https://api.openai.com/v1');
+    $translation_mode = get_option('crownpeak_dqm_translation_mode', 'fast');
+    $reasoning_effort = get_option('crownpeak_dqm_reasoning_effort', 'medium');
+    
+    $checkpoints_json = isset($_POST['checkpoints']) ? $_POST['checkpoints'] : '';
+    $target_lang = isset($_POST['targetLang']) ? sanitize_text_field($_POST['targetLang']) : 'en';
+    $batch_start = isset($_POST['batchStart']) ? intval($_POST['batchStart']) : 0;
+    $batch_size = isset($_POST['batchSize']) ? intval($_POST['batchSize']) : 10;
+    $titles_only = isset($_POST['titlesOnly']) && $_POST['titlesOnly'] === '1';
+    
+    if (empty($openai_api_key) || !is_string($openai_api_key) || strlen($openai_api_key) < 10) {
+        wp_send_json(['success' => false, 'message' => 'OpenAI API key is missing or invalid.', 'state' => 'error']);
+        wp_die();
+    }
+    
+    if (empty($checkpoints_json)) {
+        wp_send_json(['success' => false, 'message' => 'No checkpoints data provided.', 'state' => 'error']);
+        wp_die();
+    }
+    
+    $checkpoints = json_decode(stripslashes($checkpoints_json), true);
+    if (!is_array($checkpoints)) {
+        wp_send_json(['success' => false, 'message' => 'Invalid checkpoints data format.', 'state' => 'error']);
+        wp_die();
+    }
+    
+    $batch_checkpoints = array_slice($checkpoints, $batch_start, $batch_size);
+    $total_checkpoints = count($checkpoints);
+    
+    if (empty($batch_checkpoints)) {
+        wp_send_json([
+            'success' => true,
+            'translatedCheckpoints' => [],
+            'progress' => [
+                'translatedCheckpoints' => $batch_start,
+                'totalCheckpoints' => $total_checkpoints,
+                'state' => 'ready'
+            ]
+        ]);
+        wp_die();
+    }
+    
+    $language_names = [
+        'en' => 'English',
+        'de' => 'German (Deutsch)',
+        'es' => 'Spanish (Español)',
+        'fr' => 'French (Français)',
+        'it' => 'Italian (Italiano)',
+        'pt' => 'Portuguese (Português)',
+        'nl' => 'Dutch (Nederlands)',
+        'ja' => 'Japanese (日本語)',
+        'zh' => 'Chinese (中文)',
+    ];
+    
+    $language_name = isset($language_names[$target_lang]) ? $language_names[$target_lang] : 'English';
+    
+    if ($titles_only) {
+        $system_prompt = sprintf(
+            'You are a fast translator. Translate ONLY name, category, and topics to %s (%s). Skip description field. Keep translations concise and natural. Return JSON only.',
+            $language_name,
+            $target_lang
+        );
+    } elseif ($translation_mode === 'full') {
+        $system_prompt = sprintf(
+            'You are a professional translator. Translate ALL text fields (name, description, category, topics) to %s (%s). CRITICAL: ALL text fields MUST be translated to the target language. Maintain technical accuracy, preserve HTML tags if present, and ensure translations are natural and idiomatic. Return JSON only with translated fields.',
+            $language_name,
+            $target_lang
+        );
+    } else {
+        $system_prompt = sprintf(
+            'You are a fast translator. Quickly translate all text fields (name, description, category, topics) to %s (%s). Keep it concise. CRITICAL: ALL fields must be in the target language. Return JSON only.',
+            $language_name,
+            $target_lang
+        );
+    }
+    
+    $checkpoint_data = [];
+    foreach ($batch_checkpoints as $idx => $cp) {
+        $item = [
+            'id' => $cp['id'] ?? $idx,
+            'name' => $cp['name'] ?? '',
+            'category' => $cp['category'] ?? '',
+            'topics' => $cp['topics'] ?? [],
+            'failed' => $cp['failed'] ?? false
+        ];
+        
+        if (!$titles_only) {
+            $item['description'] = $cp['description'] ?? '';
+        }
+        
+        $checkpoint_data[] = $item;
+    }
+    
+    if ($titles_only) {
+        $user_prompt = sprintf(
+            "Translate checkpoint names, categories, and topics to %s (skip description):\n%s\n\nReturn JSON array with same structure but with 'name', 'category', and 'topics' translated to %s. Leave 'description' empty or omit it. Preserve 'id' and 'failed' unchanged.",
+            $language_name,
+            json_encode($checkpoint_data, JSON_PRETTY_PRINT),
+            $language_name
+        );
+    } else {
+        $user_prompt = sprintf(
+            "Translate these checkpoints to %s:\n%s\n\nReturn JSON array with same structure but with ALL text fields ('name', 'description', 'category', 'topics') fully translated to %s. Preserve the 'id' and 'failed' fields unchanged. Each checkpoint must have translated name, description, category, and topics array.",
+            $language_name,
+            json_encode($checkpoint_data, JSON_PRETTY_PRINT),
+            $language_name
+        );
+    }
+    
+    $endpoint = rtrim($openai_base_url, '/') . '/chat/completions';
+    
+    $messages = [
+        ['role' => 'system', 'content' => $system_prompt],
+        ['role' => 'user', 'content' => $user_prompt]
+    ];
+    
+    $body_data = [
+        'model' => $openai_model,
+        'messages' => $messages,
+        'temperature' => $titles_only ? 0.1 : ($translation_mode === 'full' ? 0.2 : 0.1),
+        'max_tokens' => $titles_only ? 1024 : ($translation_mode === 'full' ? 4096 : 2048),
+    ];
+    
+    if (strpos($openai_model, 'gpt-5') === 0) {
+        $body_data['reasoning_effort'] = $reasoning_effort;
+    }
+    
+    $args = [
+        'method' => 'POST',
+        'headers' => [
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer ' . $openai_api_key,
+        ],
+        'body' => json_encode($body_data),
+        'timeout' => 90,
+    ];
+    
+    $response = wp_remote_post($endpoint, $args);
+    
+    if (is_wp_error($response)) {
+        wp_send_json([
+            'success' => false,
+            'message' => 'Translation API request failed: ' . $response->get_error_message(),
+            'state' => 'error',
+            'progress' => [
+                'translatedCheckpoints' => $batch_start,
+                'totalCheckpoints' => $total_checkpoints,
+                'state' => 'error'
+            ]
+        ]);
+        wp_die();
+    }
+    
+    $status_code = wp_remote_retrieve_response_code($response);
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body, true);
+    
+    if ($status_code !== 200) {
+        $error_message = isset($data['error']['message']) ? $data['error']['message'] : 'Unknown error';
+        
+        wp_send_json([
+            'success' => false,
+            'message' => 'Translation API error: ' . $error_message,
+            'state' => 'partial',
+            'translatedCheckpoints' => [],
+            'progress' => [
+                'translatedCheckpoints' => $batch_start,
+                'totalCheckpoints' => $total_checkpoints,
+                'state' => 'partial'
+            ]
+        ]);
+        wp_die();
+    }
+    
+    if (!isset($data['choices'][0]['message']['content'])) {
+        error_log('DQM Translation: Invalid API response structure');
+        wp_send_json([
+            'success' => false,
+            'message' => 'Invalid response from translation API.',
+            'state' => 'error',
+            'progress' => [
+                'translatedCheckpoints' => $batch_start,
+                'totalCheckpoints' => $total_checkpoints,
+                'state' => 'error'
+            ]
+        ]);
+        wp_die();
+    }
+    
+    $finish_reason = isset($data['choices'][0]['finish_reason']) ? $data['choices'][0]['finish_reason'] : 'unknown';
+    error_log('DQM Translation: Finish reason: ' . $finish_reason);
+    
+    if ($finish_reason === 'length') {
+        error_log('DQM Translation: WARNING - Response truncated due to token limit!');
+    }
+    
+    $translation_text = trim($data['choices'][0]['message']['content']);
+    
+    error_log('DQM Translation: Raw response length: ' . strlen($translation_text) . ' chars');
+    error_log('DQM Translation: First 200 chars: ' . substr($translation_text, 0, 200));
+    error_log('DQM Translation: Last 200 chars: ' . substr($translation_text, -200));
+    
+    if (preg_match('/```json\\s*(.+?)\\s*```/s', $translation_text, $matches)) {
+        $translation_text = $matches[1];
+        error_log('DQM Translation: Extracted from ```json block (length: ' . strlen($translation_text) . ')');
+    } elseif (preg_match('/```\\s*(.+?)\\s*```/s', $translation_text, $matches)) {
+        $translation_text = $matches[1];
+        error_log('DQM Translation: Extracted from ``` block (length: ' . strlen($translation_text) . ')');
+    } else {
+        if (preg_match('/\\[.+\\]/s', $translation_text, $matches)) {
+            $translation_text = $matches[0];
+            error_log('DQM Translation: Extracted JSON array directly');
+        }
+    }
+    
+    $translation_text = trim($translation_text);
+    
+    $translated_data = json_decode($translation_text, true);
+    
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($translated_data)) {
+        $error_msg = json_last_error_msg();
+        error_log('DQM Translation: JSON parse error: ' . $error_msg);
+        error_log('DQM Translation: Text length: ' . strlen($translation_text));
+        error_log('DQM Translation: First 500 chars: ' . substr($translation_text, 0, 500));
+        error_log('DQM Translation: Last 500 chars: ' . substr($translation_text, -500));
+        
+        $is_truncated = !preg_match('/\\]\\s*$/', $translation_text);
+        
+        wp_send_json([
+            'success' => false,
+            'message' => 'Failed to parse translation response. JSON Error: ' . $error_msg . ($is_truncated ? ' (Response appears truncated)' : ''),
+            'state' => 'partial',
+            'translatedCheckpoints' => [],
+            'debug' => [
+                'responseLength' => strlen($translation_text),
+                'isTruncated' => $is_truncated,
+                'endsCorrectly' => preg_match('/\\]\\s*$/', $translation_text) ? 'yes' : 'no',
+                'startsCorrectly' => preg_match('/^\\s*\\[/', $translation_text) ? 'yes' : 'no',
+            ],
+            'progress' => [
+                'translatedCheckpoints' => $batch_start,
+                'totalCheckpoints' => $total_checkpoints,
+                'state' => 'partial'
+            ]
+        ]);
+        wp_die();
+    }
+    
+    $new_batch_start = $batch_start + count($batch_checkpoints);
+    $is_complete = $new_batch_start >= $total_checkpoints;
+    
+    wp_send_json([
+        'success' => true,
+        'translatedCheckpoints' => $translated_data,
+        'progress' => [
+            'translatedCheckpoints' => $new_batch_start,
+            'totalCheckpoints' => $total_checkpoints,
+            'state' => $is_complete ? 'ready' : 'translating'
+        ],
+        'isComplete' => $is_complete,
+        'nextBatchStart' => $is_complete ? null : $new_batch_start
+    ]);
+    wp_die();
+}
+
+function crownpeak_dqm_clear_translation_cache_handler()
+{
+    global $wpdb;
+    
+    $transient_prefix = $wpdb->prefix . 'transient_crownpeak_dqm_translation_';
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+            $wpdb->esc_like($transient_prefix) . '%',
+            $wpdb->esc_like('_' . $transient_prefix) . '%'
+        )
+    );
+    
+    wp_send_json([
+        'success' => true,
+        'message' => 'Translation cache cleared successfully.'
+    ]);
+    wp_die();
+}
+

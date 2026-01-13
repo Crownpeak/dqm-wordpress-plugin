@@ -90,6 +90,13 @@
             'Topics: ': 'Topics: ',
             'Retry': 'Retry',
             
+            'Accessibility': 'Accessibility',
+            'SEO': 'SEO',
+            'Brand': 'Brand',
+            'Regulatory': 'Regulatory',
+            'Legal': 'Legal',
+            'Usability': 'Usability',
+            
             // AI Assistant
             'AI Summary': 'AI Summary',
             'AI Settings': 'AI Settings',
@@ -277,6 +284,13 @@
             'Topics: ': 'Themen: ',
             'Retry': 'Wiederholen',
             
+            'Accessibility': 'Barrierefreiheit',
+            'SEO': 'SEO',
+            'Brand': 'Marke',
+            'Regulatory': 'Vorschriften',
+            'Legal': 'Rechtliches',
+            'Usability': 'Benutzerfreundlichkeit',
+            
             // AI Assistant
             'AI Summary': 'KI-Zusammenfassung',
             'AI Settings': 'KI-Einstellungen',
@@ -463,6 +477,13 @@
             'Close': 'Cerrar',
             'Topics: ': 'Temas: ',
             'Retry': 'Reintentar',
+            
+            'Accessibility': 'Accesibilidad',
+            'SEO': 'SEO',
+            'Brand': 'Marca',
+            'Regulatory': 'Regulatorio',
+            'Legal': 'Legal',
+            'Usability': 'Usabilidad',
             
             // AI Assistant
             'AI Summary': 'Resumen de IA',

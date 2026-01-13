@@ -548,27 +548,59 @@
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
+  color: #fff !important;
   margin-right: 6px;
   vertical-align: middle;
+  opacity: 1 !important;
+  background: #667eea !important; 
 }
-.badge.accessibility {
-  background: #006675;
+.badge.accessibility,
+.badge.barrierefreiheit {
+  background: #006675 !important;
 }
 .badge.seo {
-  background: #2fe8b6;
+  background: #2fe8b6 !important;
 }
-.badge.brand {
-  background: #3636c5;
+.badge.brand,
+.badge.marke {
+  background: #3636c5 !important;
 }
-.badge.regulatory {
-  background: #008060;
+.badge.regulatory,
+.badge.regulatorisch {
+  background: #008060 !important;
 }
-.badge.legal {
-  background: #001746;
+.badge.legal,
+.badge.rechtlich {
+  background: #001746 !important;
 }
-.badge.usability {
-  background: #36b37e;
+.badge.usability,
+.badge.benutzerfreundlichkeit {
+  background: #36b37e !important;
+}
+
+.badge.content-presentation,
+.badge.inhaltspraesentation,
+.badge.inhaltspr-sentation {
+  background: #764ba2 !important;
+}
+.badge.performance,
+.badge.leistung {
+  background: #f093fb !important;
+}
+.badge.security,
+.badge.sicherheit {
+  background: #c94b4b !important;
+}
+.badge.mobile,
+.badge.mobil {
+  background: #4facfe !important;
+}
+.badge.design {
+  background: #fa709a !important;
+}
+.badge.content,
+.badge.inhalt {
+  background: #30cfd0 !important;
 }
 
 .checkpoint-title-badges {
@@ -750,8 +782,6 @@
   100% { transform: rotate(360deg); }
 }
 
-
-
 .dqm-panel {
   margin: 1em 0;
   padding: 1em;
@@ -837,12 +867,76 @@
   color: #888;
 }
 
+.dqm-dialog-loading-banner {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 12px;
+  margin: -1.5em -2em 1em -1.5em;
+  border-radius: 8px 8px 0 0;
+  font-size: 0.9em;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dqm-dialog-loading-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: dqm-spin 0.8s linear infinite;
+}
+
+@keyframes dqm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dqm-dialog-placeholder {
+  color: #999;
+  font-style: italic;
+}
+
 .checkpoint-item {
   cursor: pointer;
   padding: 10px;
   margin-bottom: 10px;
   border-radius: 4px;
   transition: background-color 0.2s;
+  position: relative;
+}
+
+.checkpoint-item .checkpoint-badges {
+  opacity: 1 !important;
+}
+
+.checkpoint-item .badge {
+  opacity: 1 !important;
+  transition: opacity 0.3s ease;
+}
+
+.checkpoint-item.translating {
+  position: relative;
+}
+
+.checkpoint-item.translating::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+  animation: checkpoint-shimmer 1.5s infinite;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+@keyframes checkpoint-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 .checkpoint-item:hover {
@@ -1006,7 +1100,6 @@
     font-style: italic;
 }
 
-
 #dqm-highlight-toggle-btn {
   position: fixed;
   top: 60px;
@@ -1043,8 +1136,7 @@
 
 .dqm-ai-summary-card {
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: 10px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   background: white;
   border: 1px solid #E0E0E0;
@@ -1055,18 +1147,24 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .dqm-ai-header-left {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  flex: 1;
 }
 
 .dqm-ai-header-right {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .dqm-ai-sparkle-icon {
@@ -1076,9 +1174,14 @@
 
 .dqm-ai-summary-header h3 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
   color: #172B4D;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .dqm-ai-badge {
@@ -1090,6 +1193,8 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .dqm-ai-icon-btn {
@@ -1407,9 +1512,13 @@
 }
 
 .dqm-switch input {
+  position: absolute;
   opacity: 0;
   width: 0;
   height: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
 }
 
 .dqm-switch-slider {
@@ -1713,3 +1822,19 @@
   transition: color 0.15s;
 }
 
+.dqm-ai-assistant-button.translating .dqm-ai-icon-spinning {
+  animation: ai-button-spin 1s linear infinite;
+}
+
+@keyframes ai-button-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.dqm-ai-assistant-button.translating {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+.dqm-ai-assistant-button.translating:hover {
+  background: rgba(101, 84, 192, 0.08);

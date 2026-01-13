@@ -1,6 +1,7 @@
 (function addDqmCmsButton() {
     let checkpointsList = null;
     let allCheckpoints = [];
+    let originalCheckpoints = [];
     let allTopics = new Set();
     let checkpointStatusMap = {};
     let lastAssetId = null;
@@ -8,8 +9,40 @@
     let toggleButton = null;
     let currentCheckpointForToggle = null;
     let aiSummaryCache = {};
-    let renderScoreCard = null; // Will be set when panel is created
-    let renderCheckpointsList = null; // Will be set when panel is created
+    let renderScoreCard = null;
+    let renderCheckpointsList = null;
+
+    let aiTranslationManager = null;
+    if (window.AITranslationManager) {
+        aiTranslationManager = new window.AITranslationManager();
+    }
+
+    const AI_STORAGE_KEYS = {
+        translationEnabled: 'dqm_translation_enabled',
+        translationMode: 'dqm_translation_mode',
+        summaryEnabled: 'dqm_summary_enabled'
+    };
+
+    function getAIToggleState(key, defaultValue) {
+        try {
+            const value = localStorage.getItem(AI_STORAGE_KEYS[key]);
+            return value !== null ? value : defaultValue;
+        } catch (e) {
+            return defaultValue;
+        }
+    }
+
+    function setAIToggleState(key, value) {
+        try {
+            localStorage.setItem(AI_STORAGE_KEYS[key], value);
+        } catch (e) {
+            console.warn('Failed to save AI toggle state:', e);
+        }
+    }
+
+    let translationEnabled = getAIToggleState('translationEnabled', 'false') === 'true';
+    let translationMode = getAIToggleState('translationMode', 'fast');
+    let summaryEnabled = getAIToggleState('summaryEnabled', 'false') === 'true';
 
     const __ = window.wp && wp.i18n && wp.i18n.__ ? wp.i18n.__ : function (s) { return s; };
     const TABLIST_SELECTOR = 'div[role="tablist"][aria-orientation="horizontal"]';
@@ -20,7 +53,7 @@
     const SUPPORTED_LOCALES = ['en', 'de', 'es'];
     const DEFAULT_LOCALE = 'en';
     const LOCALE_STORAGE_KEY = 'dqm_locale';
-    
+
     const translations = {
         en: {
             language: 'Language',
@@ -112,45 +145,28 @@
         userOverride = false;
         return DEFAULT_LOCALE;
     }
-
-    /**
-     * Translation function with interpolation support (similar to i18next)
-     * @param {string} key - Translation key
-     * @param {object} params - Optional parameters for interpolation
-     * @param {string} locale - Optional locale override
-     * @returns {string} Translated string with interpolated values
-     * 
-     * Examples:
-     * t('title') -> "Digital Quality and Accessibility"
-     * t('summary_stats', { attempts: 5, empty: 2, mode: 'fast', duration: 120 })
-     *   -> "AI stats – attempts: 5, empty: 2, mode: fast, duration: 120ms"
-     */
     function t(key, params = {}, locale = null) {
-        // Handle legacy calls where second parameter is locale string
         if (typeof params === 'string') {
             locale = params;
             params = {};
         }
-        
+
         const targetLocale = normalizeLocale(locale || currentLocale);
         let translation = key;
-        
-        // Try to get translation from DQM_I18N first (comprehensive translations)
+
         if (window.DQM_I18N && window.DQM_I18N[targetLocale] && window.DQM_I18N[targetLocale][key]) {
             translation = window.DQM_I18N[targetLocale][key];
         }
-        // Fallback to local translations
         else if (translations[targetLocale] && translations[targetLocale][key]) {
             translation = translations[targetLocale][key];
         }
-        
-        // Support interpolation (replace {{variable}} with values)
+
         if (params && typeof params === 'object' && Object.keys(params).length > 0) {
             translation = translation.replace(/\{\{(\w+)\}\}/g, (match, variable) => {
                 return params[variable] !== undefined ? params[variable] : match;
             });
         }
-        
+
         return translation;
     }
 
@@ -333,7 +349,6 @@
     }
     }
 
-
     function updateToggleButtonText() {
         if (toggleButton) {
             const buttonText = currentHighlightMode === 'page' ? 
@@ -379,7 +394,7 @@
 
     function performHighlighting(checkpointId, checkpointName, mode) {
         const apiKey = CrownpeakDQM.apiKey;
-        
+
         if (mode === 'page') {
             const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}`;
             fetch(url, {
@@ -409,7 +424,7 @@
     function showSourceInEditor(checkpointId) {
         const apiKey = CrownpeakDQM.apiKey;
         const url = `https://api.crownpeak.net/dqm-cms/v1/assets/${lastAssetId}/errors/${checkpointId}?apiKey=${apiKey}&highlightSource=true`;
-        
+
         fetch(url, {
             headers: {
                 'x-api-key': apiKey
@@ -461,7 +476,7 @@
 
     function clearHighlights(preserveToggleButton = false) {
     const contexts = [document, getEditorDocument()];
-    
+
     contexts.forEach(context => {
         context.querySelectorAll('[data-dqm-highlighted="true"]').forEach(element => {
             const originalStyle = element.getAttribute('data-original-style') || '';
@@ -469,7 +484,7 @@
             element.removeAttribute('data-dqm-highlighted');
             element.removeAttribute('data-original-style');
         });
-        
+
         if (context.body && context.body.hasAttribute('data-dqm-source-view')) {
             const originalContent = context.body.getAttribute('data-dqm-original-content');
             if (originalContent) {
@@ -479,7 +494,7 @@
             context.body.removeAttribute('data-dqm-source-view');
         }
     });
-    
+
     if (!preserveToggleButton) {
         currentHighlightedCheckpointId = null;
         hideToggleButton();
@@ -532,10 +547,10 @@
         if (!editorElement.hasAttribute('data-original-style')) {
             editorElement.setAttribute('data-original-style', editorElement.style.cssText || '');
         }
-        
+
         const apiStyle = apiElement.getAttribute('style') || '';
         editorElement.setAttribute('style', apiStyle);
-        
+
         editorElement.setAttribute('data-dqm-highlighted', 'true');
         if (index === 0) {
             editorElement.scrollIntoView({
@@ -581,28 +596,28 @@
     function generateAISummary(assetId, checkpoints, targetLang = currentLocale) {
         const container = document.getElementById('dqm-ai-summary-container');
         if (!container) return;
-        
-        const aiEnabled = CrownpeakDQM.aiSummaryEnabled === '1';
+
+        const aiEnabled = getAIToggleState('summaryEnabled', 'false') === 'true';
         const hasOpenAIKey = CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10;
-        
+
         if (!aiEnabled || !hasOpenAIKey) {
             container.style.display = 'none';
             return;
         }
-        
+
         const cacheKey = `${assetId}:${targetLang}`;
         if (aiSummaryCache[cacheKey]) {
             renderAISummary(aiSummaryCache[cacheKey], false);
             return;
         }
-        
+
         container.style.display = 'block';
         container.innerHTML = `
             <div class="card dqm-ai-summary-card">
                 <div class="dqm-ai-summary-header">
                     <div class="dqm-ai-header-left">
                         <svg class="dqm-ai-sparkle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                            <path d="m19 9 1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25z"/>
                         </svg>
                         <h3>${t('summary_title')}</h3>
                         <span class="dqm-ai-badge">${t('ai_backend_api')}</span>
@@ -617,19 +632,19 @@
                 </div>
             </div>
         `;
-        
+
         const settingsBtn = document.getElementById('dqm-ai-settings-btn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', showAISettingsDialog);
         }
-        
+
         const params = new URLSearchParams({
             action: 'crownpeak_dqm_ai_summary',
             assetId: assetId,
             checkpoints: JSON.stringify(checkpoints),
             targetLang: targetLang
         });
-        
+
         fetch(CrownpeakDQM.ajaxurl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -648,25 +663,35 @@
             renderAISummaryError(__('Network error: ', 'dqm-wordpress-plugin') + error.message);
         });
     }
-    
+
+    function formatMarkdown(text) {
+        if (!text) return text;
+
+        return text
+            .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
     function renderAISummary(data, isNew) {
         const container = document.getElementById('dqm-ai-summary-container');
         if (!container) return;
-        
+
         const bullets = data.bullets || [];
         const stats = data.stats || {};
-        
+
         let bulletsHTML = '';
         bullets.forEach((bullet, index) => {
-            bulletsHTML += `<li class="dqm-ai-bullet" style="animation-delay: ${index * 0.1}s">${bullet}</li>`;
+            const formattedBullet = formatMarkdown(bullet);
+            bulletsHTML += `<li class="dqm-ai-bullet" style="animation-delay: ${index * 0.1}s">${formattedBullet}</li>`;
         });
-        
+
         container.innerHTML = `
             <div class="card dqm-ai-summary-card">
                 <div class="dqm-ai-summary-header">
                     <div class="dqm-ai-header-left">
                         <svg class="dqm-ai-sparkle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                            <path d="m19 9 1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25z"/>
                         </svg>
                         <h3>${t('summary_title')}</h3>
                         <span class="dqm-ai-badge">${t('ai_backend_api')}</span>
@@ -702,40 +727,40 @@
                 </div>
             </div>
         `;
-        
+
         const settingsBtn = document.getElementById('dqm-ai-settings-btn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', showAISettingsDialog);
         }
-        
+
         const regenerateBtn = document.getElementById('dqm-ai-regenerate-btn');
         const regenerateHeaderBtn = document.getElementById('dqm-ai-regenerate-header-btn');
-        
+
         const regenerateHandler = () => {
             const cacheKey = `${lastAssetId}:${currentLocale}`;
             delete aiSummaryCache[cacheKey];
             generateAISummary(lastAssetId, allCheckpoints, currentLocale);
         };
-        
+
         if (regenerateBtn) {
             regenerateBtn.addEventListener('click', regenerateHandler);
         }
-        
+
         if (regenerateHeaderBtn) {
             regenerateHeaderBtn.addEventListener('click', regenerateHandler);
         }
     }
-    
+
     function renderAISummaryError(errorMessage) {
         const container = document.getElementById('dqm-ai-summary-container');
         if (!container) return;
-        
+
         container.innerHTML = `
             <div class="card dqm-ai-summary-card dqm-ai-error">
                 <div class="dqm-ai-summary-header">
                     <div class="dqm-ai-header-left">
                         <svg class="dqm-ai-sparkle-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+                            <path d="m19 9 1.25-2.75L23 5l-2.75-1.25L19 1l-1.25 2.75L15 5l2.75 1.25zm-7.5.5L9 4 6.5 9.5 1 12l5.5 2.5L9 20l2.5-5.5L17 12zM19 15l-1.25 2.75L15 19l2.75 1.25L19 23l1.25-2.75L23 19l-2.75-1.25z"/>
                         </svg>
                         <h3>${t('AI Summary')}</h3>
                         <span class="dqm-ai-badge">ChatGPT</span>
@@ -754,12 +779,12 @@
                 </div>
             </div>
         `;
-        
+
         const settingsBtn = document.getElementById('dqm-ai-settings-btn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', showAISettingsDialog);
         }
-        
+
         const retryBtn = document.getElementById('dqm-ai-retry-btn');
         if (retryBtn) {
             retryBtn.addEventListener('click', () => {
@@ -767,13 +792,11 @@
             });
         }
     }
-    
+
     function showAISettingsDialog() {
-        const translationEnabled = CrownpeakDQM.aiTranslationEnabled === '1';
-        const summaryEnabled = CrownpeakDQM.aiSummaryEnabled === '1';
         const hasOpenAIKey = CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10;
         const accordionExpanded = !hasOpenAIKey;
-        
+
         const dialogHTML = `
             <div class="dqm-ai-settings-dialog" id="dqm-ai-settings-dialog">
                 <div class="dqm-ai-settings-content">
@@ -791,25 +814,37 @@
                             <div class="dqm-toggle-item">
                                 <div class="dqm-toggle-info">
                                     <strong>${t('Auto-translate DQM results')}</strong>
-                                    <p class="dqm-toggle-description">${t('When enabled, checkpoint names and descriptions are translated based on your DQM language setting.')}</p>
+                                    <p class="dqm-toggle-description">${t('Automatically translate checkpoint names and descriptions. Includes failed checkpoints.')}</p>
                                 </div>
                                 <label class="dqm-switch">
-                                    <input type="checkbox" id="dqm-translation-toggle" ${translationEnabled ? 'checked' : ''} disabled>
+                                    <input type="checkbox" id="dqm-translation-toggle" ${translationEnabled ? 'checked' : ''} ${!hasOpenAIKey ? 'disabled' : ''}>
                                     <span class="dqm-switch-slider"></span>
                                 </label>
                             </div>
-                            
+
+                            <div class="dqm-toggle-item">
+                                <div class="dqm-toggle-info">
+                                    <strong>${t('Full translation power')}</strong>
+                                    <p class="dqm-toggle-description">${t('Comprehensive translation (slower). When disabled, uses fast mode.')}</p>
+                                </div>
+                                <label class="dqm-switch">
+                                    <input type="checkbox" id="dqm-translation-mode-toggle" ${translationMode === 'full' ? 'checked' : ''} ${!hasOpenAIKey || !translationEnabled ? 'disabled' : ''}>
+                                    <span class="dqm-switch-slider"></span>
+                                </label>
+                            </div>
+
                             <div class="dqm-toggle-item">
                                 <div class="dqm-toggle-info">
                                     <strong>${t('AI summary card')}</strong>
+                                    <p class="dqm-toggle-description">${t('Generate bullet-point summaries of critical quality issues.')}</p>
                                 </div>
                                 <label class="dqm-switch">
-                                    <input type="checkbox" id="dqm-summary-toggle" ${summaryEnabled ? 'checked' : ''} disabled>
+                                    <input type="checkbox" id="dqm-summary-toggle" ${summaryEnabled ? 'checked' : ''} ${!hasOpenAIKey ? 'disabled' : ''}>
                                     <span class="dqm-switch-slider"></span>
                                 </label>
                             </div>
                         </div>
-                        
+
                         <div class="dqm-accordion" id="dqm-ai-accordion">
                             <div class="dqm-accordion-header ${accordionExpanded ? 'expanded' : ''}" id="dqm-accordion-header">
                                 <div class="dqm-accordion-title">
@@ -828,28 +863,28 @@
                                     <i class="fa-solid fa-circle-info"></i>
                                     <p>${t('AI may hallucinate or provide inaccurate information. Review results carefully.')}</p>
                                 </div>
-                                
+
                                 <div class="dqm-field-group">
                                     <label>${t('Model')}</label>
                                     <div class="dqm-readonly-field">
                                         ${CrownpeakDQM.openaiModel || 'gpt-4o-mini'}
                                     </div>
                                 </div>
-                                
+
                                 <div class="dqm-field-group">
                                     <label>${t('Base URL')}</label>
                                     <div class="dqm-readonly-field">
                                         https://api.openai.com/v1
                                     </div>
                                 </div>
-                                
+
                                 <div class="dqm-field-group">
                                     <label>${t('API Key')}</label>
                                     <div class="dqm-readonly-field">
                                         ${hasOpenAIKey ? '••••••••••••••••' : t('Not configured')}
                                     </div>
                                 </div>
-                                
+
                                 ${translationEnabled && hasOpenAIKey ? `
                                 <div class="dqm-status-section">
                                     <div class="dqm-alert dqm-alert-success">
@@ -858,7 +893,7 @@
                                     </div>
                                 </div>
                                 ` : ''}
-                                
+
                                 <div class="dqm-settings-link">
                                     <p>
                                         ${t('To change AI settings, visit')} 
@@ -869,13 +904,25 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="dqm-ai-warning-box">
                             <i class="fa-solid fa-triangle-exclamation"></i>
                             <p>${t('AI may hallucinate or provide inaccurate information. Review results carefully.')}</p>
                         </div>
+
+                        <div id="dqm-translation-progress-container" style="display: none;">
+                            <div class="dqm-translation-progress">
+                                <div class="dqm-translation-status">
+                                    <strong id="dqm-translation-status-text">${t('Translating...')}</strong>
+                                </div>
+                                <div class="dqm-progress-bar">
+                                    <div class="dqm-progress-fill" id="dqm-translation-progress-fill" style="width: 0%"></div>
+                                </div>
+                                <div class="dqm-progress-text" id="dqm-translation-progress-text">0 / 0 ${t('checkpoints translated')}</div>
+                            </div>
+                        </div>
                     </div>
-                    
+
                     <div class="dqm-ai-settings-footer">
                         <button class="dqm-action-btn dqm-action-btn-secondary" id="dqm-ai-clear-cache-btn">
                             ${t('Clear AI cache')}
@@ -883,7 +930,7 @@
                         <button class="dqm-action-btn dqm-action-btn-secondary" id="dqm-ai-translate-btn" ${!translationEnabled || !hasOpenAIKey ? 'disabled' : ''}>
                             ${t('Translate missing items')}
                         </button>
-                        <button class="dqm-action-btn dqm-action-btn-secondary" id="dqm-ai-restart-summary-btn" ${!summaryEnabled || !hasOpenAIKey ? 'disabled' : ''}>
+                        <button class="dqm-action-btn dqm-action-btn-secondary" id="dqm-ai-restart-summary-btn" ${!summaryEnabled || !hasOpenAIKey || !lastAssetId ? 'disabled' : ''}>
                             ${t('Restart summary')}
                         </button>
                         <button class="dqm-action-btn dqm-action-btn-primary" id="dqm-ai-close-btn">
@@ -893,14 +940,14 @@
                 </div>
             </div>
         `;
-        
+
         const existingDialog = document.getElementById('dqm-ai-settings-dialog');
         if (existingDialog) {
             existingDialog.remove();
         }
-        
+
         document.body.insertAdjacentHTML('beforeend', dialogHTML);
-        
+
         const dialog = document.getElementById('dqm-ai-settings-dialog');
         const closeBtn = document.getElementById('dqm-ai-settings-close');
         const closeBtnFooter = document.getElementById('dqm-ai-close-btn');
@@ -909,7 +956,43 @@
         const restartSummaryBtn = document.getElementById('dqm-ai-restart-summary-btn');
         const accordionHeader = document.getElementById('dqm-accordion-header');
         const accordionContent = document.getElementById('dqm-accordion-content');
-        
+
+        const translationToggle = document.getElementById('dqm-translation-toggle');
+        const translationModeToggle = document.getElementById('dqm-translation-mode-toggle');
+        const summaryToggle = document.getElementById('dqm-summary-toggle');
+
+        if (translationToggle) {
+            translationToggle.addEventListener('change', (e) => {
+                translationEnabled = e.target.checked;
+                setAIToggleState('translationEnabled', translationEnabled.toString());
+
+                if (translationModeToggle) {
+                    translationModeToggle.disabled = !translationEnabled;
+                }
+
+            });
+        }
+
+        if (translationModeToggle) {
+            translationModeToggle.addEventListener('change', (e) => {
+                translationMode = e.target.checked ? 'full' : 'fast';
+                setAIToggleState('translationMode', translationMode);
+
+            });
+        }
+
+        if (summaryToggle) {
+            summaryToggle.addEventListener('change', (e) => {
+                summaryEnabled = e.target.checked;
+                setAIToggleState('summaryEnabled', summaryEnabled.toString());
+
+                if (summaryEnabled && lastAssetId && allCheckpoints.length > 0) {
+                    generateAISummary(lastAssetId, allCheckpoints, currentLocale);
+                }
+
+            });
+        }
+
         if (accordionHeader && accordionContent) {
             accordionHeader.addEventListener('click', () => {
                 const isExpanded = accordionHeader.classList.contains('expanded');
@@ -917,19 +1000,19 @@
                 accordionContent.classList.toggle('expanded');
             });
         }
-        
+
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
                 dialog.remove();
             });
         }
-        
+
         if (closeBtnFooter) {
             closeBtnFooter.addEventListener('click', () => {
                 dialog.remove();
             });
         }
-        
+
         if (clearCacheBtn) {
             clearCacheBtn.addEventListener('click', () => {
                 aiSummaryCache = {};
@@ -941,7 +1024,7 @@
                 }, 2000);
             });
         }
-        
+
         if (restartSummaryBtn && !restartSummaryBtn.disabled) {
             restartSummaryBtn.addEventListener('click', () => {
                 const cacheKey = `${lastAssetId}:${currentLocale}`;
@@ -957,13 +1040,13 @@
                 }, 2000);
             });
         }
-        
+
         dialog.addEventListener('click', (e) => {
             if (e.target === dialog) {
                 dialog.remove();
             }
         });
-        
+
         document.addEventListener('keydown', function escapeHandler(e) {
             if (e.key === 'Escape') {
                 dialog.remove();
@@ -971,7 +1054,7 @@
             }
         });
     }
-    
+
     function showDqmPanel(show) {
         let panel = document.getElementById(PANEL_ID);
         if (!panel && show) {
@@ -989,16 +1072,17 @@
             scanBtn.className = 'primary-button';
             const headerContainer = document.createElement('div');
             headerContainer.className = 'dqm-header-container';
-            
+
             const headerTitle = document.createElement('div');
             headerTitle.className = 'dqm-header-title';
             headerTitle.textContent = t('title');
             headerContainer.appendChild(headerTitle);
-            
+
             const languageSwitcher = createLanguageSwitcher();
             headerContainer.appendChild(languageSwitcher);
-            
-            if (CrownpeakDQM.aiSummaryEnabled) {
+
+            const hasOpenAIKey = CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10;
+            if (hasOpenAIKey) {
                 const aiAssistantBtn = document.createElement('button');
                 aiAssistantBtn.id = 'dqm-ai-assistant-btn';
                 aiAssistantBtn.className = 'dqm-ai-assistant-button';
@@ -1010,9 +1094,9 @@
                 };
                 headerContainer.appendChild(aiAssistantBtn);
             }
-            
+
             panel.appendChild(headerContainer);
-            
+
             const aiSummaryContainer = document.createElement('div');
             aiSummaryContainer.id = 'dqm-ai-summary-container';
             aiSummaryContainer.style.display = 'none';
@@ -1074,6 +1158,12 @@
                         const li = document.createElement('li');
                         li.className = 'checkpoint-item';
                         li.setAttribute('data-checkpoint-id', cp.id);
+
+                        if (aiTranslationManager && 
+                            aiTranslationManager.translationState === 'translating' &&
+                            !aiTranslationManager.isCheckpointFullyTranslated(cp.id)) {
+                            li.classList.add('translating');
+                        }
 
                         const canHighlightPage = cp.canHighlight && cp.canHighlight.page === true;
                         const canHighlightSource = cp.canHighlight && cp.canHighlight.source === true;
@@ -1162,11 +1252,153 @@
 
             fetch(ajaxurl + '?action=crownpeakDqmGetCheckpoints', { credentials: 'same-origin' })
                 .then(response => response.json())
-                .then(data => {
-                    topicsLoading.style.display = 'none';
+                .then(async (data) => {
                     if (data.success && Array.isArray(data.checkpoints)) {
-                        allCheckpoints = data.checkpoints;
-                        data.checkpoints.forEach(cp => {
+                        let checkpoints = data.checkpoints;
+
+                        originalCheckpoints = JSON.parse(JSON.stringify(checkpoints));
+
+                        const resolvedLocale = resolveLocale();
+                        if (resolvedLocale !== currentLocale) {
+
+                            currentLocale = resolvedLocale;
+                        }
+
+                        const targetLang = currentLocale || 'en';
+
+                        const translationEnabled = getAIToggleState('translationEnabled', 'false') === 'true';
+                        const hasOpenAIKey = CrownpeakDQM.openaiApiKey && CrownpeakDQM.openaiApiKey.length > 10;
+                        const isTranslationReady = translationEnabled && hasOpenAIKey;
+                        const isTranslationNeeded = targetLang && targetLang !== 'en';
+
+
+
+
+                        if (!aiTranslationManager) {
+                            console.warn('⚠️ Translation Manager not initialized');
+                        } else if (!isTranslationReady) {
+                            console.warn('⚠️ Translation not ready. Toggle enabled:', translationEnabled, 'API Key:', hasOpenAIKey);
+                        } else if (!isTranslationNeeded) {
+
+                        }
+
+                        if (aiTranslationManager && isTranslationReady && isTranslationNeeded) {
+                            try {
+                                setAIButtonLoadingState(true);
+
+                                topicsLoading.textContent = __('Translating titles...', 'dqm-wordpress-plugin');
+                                topicsLoading.style.display = 'inline';
+
+                                checkpoints = await aiTranslationManager.translateCheckpoints(
+                                    checkpoints, 
+                                    targetLang,
+                                    (progress, state, error) => {
+                                        if (progress) {
+                                            const percent = Math.round((progress.translatedCheckpoints / progress.totalCheckpoints) * 100);
+                                            topicsLoading.textContent = `${__('Translating titles...', 'dqm-wordpress-plugin')} ${percent}%`;
+
+                                            updateTranslationProgressInDialog(progress, state);
+                                        }
+                                        if (error) {
+                                            console.warn('⚠️ Title translation error:', error);
+                                        }
+                                    },
+                                    true
+                                );
+
+                                allCheckpoints = checkpoints;
+
+                                allTopics.clear();
+                                checkpoints.forEach(cp => {
+                                    if (Array.isArray(cp.topics)) {
+                                        cp.topics.forEach(t => allTopics.add(t));
+                                    }
+                                });
+
+                                while (topicsDropdown.options.length > 1) {
+                                    topicsDropdown.remove(1);
+                                }
+                                Array.from(allTopics).sort().forEach(topic => {
+                                    const opt = document.createElement('option');
+                                    opt.value = topic;
+                                    opt.textContent = topic;
+                                    topicsDropdown.appendChild(opt);
+                                });
+
+                                renderCheckpointsList(topicsDropdown.value || 'all');
+                                topicsLoading.style.display = 'none';
+
+                                aiTranslationManager.translateCheckpoints(
+                                    checkpoints, 
+                                    targetLang,
+                                    (progress, state, error) => {
+                                        if (progress) {
+                                            const percent = Math.round((progress.translatedCheckpoints / progress.totalCheckpoints) * 100);
+
+                                            updateTranslationProgressInDialog(progress, state);
+                                        }
+                                        if (state === 'ready' || state === 'error') {
+                                            setAIButtonLoadingState(false);
+                                            updateTranslationProgressInDialog(progress, state);
+                                        }
+                                    },
+                                    false 
+                                ).then(fullyTranslatedCheckpoints => {
+
+                                    checkpoints = fullyTranslatedCheckpoints;
+                                    allCheckpoints = fullyTranslatedCheckpoints;
+
+                                    allTopics.clear();
+                                    fullyTranslatedCheckpoints.forEach(cp => {
+                                        if (Array.isArray(cp.topics)) {
+                                            cp.topics.forEach(t => allTopics.add(t));
+                                        }
+                                    });
+
+                                    while (topicsDropdown.options.length > 1) {
+                                        topicsDropdown.remove(1);
+                                    }
+                                    Array.from(allTopics).sort().forEach(topic => {
+                                        const opt = document.createElement('option');
+                                        opt.value = topic;
+                                        opt.textContent = topic;
+                                        topicsDropdown.appendChild(opt);
+                                    });
+
+                                    renderCheckpointsList(topicsDropdown.value || 'all');
+
+                                    document.querySelectorAll('.checkpoint-item.translating').forEach(item => {
+                                        item.classList.remove('translating');
+                                    });
+
+                                    setAIButtonLoadingState(false);
+
+                                }).catch(err => {
+
+                                    document.querySelectorAll('.checkpoint-item.translating').forEach(item => {
+                                        item.classList.remove('translating');
+                                    });
+
+                                    setAIButtonLoadingState(false);
+                                });
+
+                                return;
+
+                            } catch (error) {
+
+                                if (error.name === 'AbortError' || error.message.includes('aborted')) {
+                                    console.log('⏸️ Translation aborted (user switched language)');
+                                } else {
+                                    console.error('❌ Translation failed:', error);
+                                }
+                                setAIButtonLoadingState(false);
+                            }
+                        }
+
+                        topicsLoading.style.display = 'none';
+                        allCheckpoints = checkpoints;
+                        allTopics.clear();
+                        checkpoints.forEach(cp => {
                             if (Array.isArray(cp.topics)) {
                                 cp.topics.forEach(t => allTopics.add(t));
                             }
@@ -1179,6 +1411,7 @@
                         });
                         renderCheckpointsList('all');
                     } else {
+                        topicsLoading.style.display = 'none';
                         var opt = document.createElement('option');
                         opt.value = '';
                         opt.textContent = __('No topics found', 'dqm-wordpress-plugin');
@@ -1213,7 +1446,7 @@
             renderScoreCard = function(passedCount, totalCount) {
                 const percent = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
                 let html = `
-                    
+
                     <div class="card">
                         <h3>📊 ${t('quality_overview')}</h3>
                         <div class="chart-container">
@@ -1251,13 +1484,14 @@
                         const percent = total > 0 ? Math.round((passed / total) * 100) : 0;
                         const color = topicColors[topic] || '#888';
                         const badgeClass = 'badge ' + topic.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                        const translatedTopic = t(topic) || topic;
                         if (idx > 0) {
                             html += `<hr class="dqm-breakdown-divider">`;
                         }
                         html += `
                             <div class="dqm-breakdown-item">
                                 <div class="dqm-breakdown-header">
-                                    <span class="${badgeClass}" style="background:${color}">${topic}</span>
+                                    <span class="${badgeClass}" style="background:${color}">${translatedTopic}</span>
                                     <span>${passed}/${total} ${t('passed')}</span>
                                 </div>
                                 <div class="dqm-breakdown-bar">
@@ -1481,11 +1715,11 @@
                         showTopicsWithCheckpoints();
                         spinner.style.display = 'none';
                         fetchAndRenderSpellcheck(data.assetId);
-                        
+
                         if (CrownpeakDQM.aiSummaryEnabled === '1') {
                             generateAISummary(data.assetId, allCheckpoints, currentLocale);
                         }
-                        
+
                         resultDiv.style.display = 'none';
                     } else {
                         spinner.style.display = 'none';
@@ -1633,47 +1867,47 @@
         button.className = 'dqm-language-button';
         button.setAttribute('aria-label', t('language'));
         button.disabled = localeSource === 'url';
-        
+
         button.innerHTML = '<svg class="dqm-translate-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>';
-        
+
         const menu = document.createElement('div');
         menu.className = 'dqm-language-menu';
         menu.style.display = 'none';
-        
+
         const flagSvg = {
             en: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="14"><rect width="22" height="14" fill="#fff"/><g stroke-width="0"><rect y="0" width="22" height="2" fill="#b22234"/><rect y="3" width="22" height="2" fill="#b22234"/><rect y="6" width="22" height="2" fill="#b22234"/><rect y="9" width="22" height="2" fill="#b22234"/><rect y="12" width="22" height="2" fill="#b22234"/><rect width="10" height="8" fill="#3c3b6e"/></g></svg>',
             de: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="14"><rect width="22" height="14" fill="#ffce00"/><rect y="0" width="22" height="4.67" fill="#000"/><rect y="9.33" width="22" height="4.67" fill="#dd0000"/></svg>',
             es: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="14"><rect width="22" height="14" fill="#c60b1e"/><rect y="4" width="22" height="6" fill="#ffc400"/></svg>'
         };
-        
+
         SUPPORTED_LOCALES.forEach(function(locale) {
             const menuItem = document.createElement('div');
             menuItem.className = 'dqm-language-menu-item';
             if (locale === currentLocale) {
                 menuItem.classList.add('active');
             }
-            
+
             const flagContainer = document.createElement('div');
             flagContainer.className = 'dqm-flag-container';
             flagContainer.innerHTML = flagSvg[locale];
-            
+
             const labelContainer = document.createElement('div');
             labelContainer.className = 'dqm-language-label';
-            
+
             const labelRow = document.createElement('div');
             labelRow.className = 'dqm-language-label-row';
-            
+
             const label = document.createElement('span');
             label.textContent = t('language_' + locale);
-            
+
             const code = document.createElement('span');
             code.className = 'dqm-language-code';
             code.textContent = locale.toUpperCase();
-            
+
             labelRow.appendChild(label);
             labelRow.appendChild(code);
             labelContainer.appendChild(labelRow);
-            
+
             if (locale === currentLocale) {
                 const sourceLabel = document.createElement('div');
                 sourceLabel.className = 'dqm-language-source';
@@ -1683,103 +1917,290 @@
                 }
                 labelContainer.appendChild(sourceLabel);
             }
-            
+
             menuItem.appendChild(flagContainer);
             menuItem.appendChild(labelContainer);
-            
+
             menuItem.addEventListener('click', function() {
                 if (locale !== currentLocale && localeSource !== 'url') {
                     changeLanguage(locale);
                     menu.style.display = 'none';
                 }
             });
-            
+
             menu.appendChild(menuItem);
         });
-        
+
         const divider = document.createElement('div');
         divider.className = 'dqm-menu-divider';
         menu.appendChild(divider);
-        
+
         const resetItem = document.createElement('div');
         resetItem.className = 'dqm-language-menu-item dqm-reset-item';
         resetItem.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>';
         const resetText = document.createElement('span');
         resetText.textContent = t('reset');
         resetItem.appendChild(resetText);
-        
+
         resetItem.addEventListener('click', function() {
             if (localeSource !== 'url' && userOverride) {
                 resetLanguage();
                 menu.style.display = 'none';
             }
         });
-        
+
         if (!userOverride || localeSource === 'url') {
             resetItem.style.opacity = '0.5';
             resetItem.style.cursor = 'not-allowed';
         }
-        
+
         menu.appendChild(resetItem);
-        
+
         button.addEventListener('click', function(e) {
             e.stopPropagation();
             menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
         });
-        
+
         document.addEventListener('click', function(e) {
             if (!container.contains(e.target)) {
                 menu.style.display = 'none';
             }
         });
-        
+
         container.appendChild(button);
         container.appendChild(menu);
-        
+
         return container;
+    }
+
+    function updateTranslationProgressInDialog(progress, state) {
+        const container = document.getElementById('dqm-translation-progress-container');
+        const statusText = document.getElementById('dqm-translation-status-text');
+        const progressFill = document.getElementById('dqm-translation-progress-fill');
+        const progressText = document.getElementById('dqm-translation-progress-text');
+
+        if (!container) return;
+
+        if (state === 'translating' && progress) {
+            container.style.display = 'block';
+            const percent = progress.totalCheckpoints > 0 
+                ? Math.round((progress.translatedCheckpoints / progress.totalCheckpoints) * 100) 
+                : 0;
+            
+            if (statusText) statusText.textContent = t('Translating...');
+            if (progressFill) progressFill.style.width = `${percent}%`;
+            if (progressText) {
+                progressText.textContent = `${progress.translatedCheckpoints} / ${progress.totalCheckpoints} ${t('checkpoints translated')}`;
+            }
+        } else if (state === 'ready') {
+
+            setTimeout(() => {
+                if (container) container.style.display = 'none';
+            }, 2000);
+        } else if (state === 'error' || state === 'idle') {
+            container.style.display = 'none';
+        }
+    }
+
+    function setAIButtonLoadingState(isLoading) {
+        const aiAssistantBtn = document.getElementById('dqm-ai-assistant-btn');
+        if (!aiAssistantBtn) return;
+
+        if (isLoading) {
+            aiAssistantBtn.classList.add('translating');
+            const originalIcon = aiAssistantBtn.innerHTML;
+            aiAssistantBtn.setAttribute('data-original-icon', originalIcon);
+            aiAssistantBtn.innerHTML = `
+                <svg class="dqm-ai-icon dqm-ai-icon-spinning" focusable="false" aria-hidden="true" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+                    <path fill="currentColor" d="M12 2 A10 10 0 0 1 22 12" opacity="0.75"/>
+                </svg>
+            `;
+
+            aiAssistantBtn.disabled = false;
+        } else {
+            aiAssistantBtn.classList.remove('translating');
+            const originalIcon = aiAssistantBtn.getAttribute('data-original-icon');
+            if (originalIcon) {
+                aiAssistantBtn.innerHTML = originalIcon;
+                aiAssistantBtn.removeAttribute('data-original-icon');
+            }
+            aiAssistantBtn.disabled = false;
+        }
     }
 
     function changeLanguage(newLocale) {
         if (!SUPPORTED_LOCALES.includes(newLocale)) return;
-        
+
         currentLocale = newLocale;
         localeSource = 'user';
         userOverride = true;
         persistLocale(newLocale);
-        
+
         if (window.wp && wp.i18n && wp.i18n.setLocaleData) {
             try {
                 const localeMap = { en: 'en_US', de: 'de_DE', es: 'es_ES' };
                 const wpLocale = localeMap[newLocale] || 'en_US';
-                console.log('Switching to locale:', wpLocale);
+
             } catch (e) {
                 console.warn('Could not update WordPress locale:', e);
             }
         }
-        
+
         updateUITranslations();
-        
-        // Re-render score card if analysis data exists
-        if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
-            const total = allCheckpoints.length;
-            const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
-            const scoreCardContainer = document.getElementById('dqm-score-card-container');
-            if (scoreCardContainer) {
-                renderScoreCard(passed, total);
+
+        if (Object.keys(checkpointStatusMap).length > 0) {
+            if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
+                const total = allCheckpoints.length;
+                const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
+                const scoreCardContainer = document.getElementById('dqm-score-card-container');
+                if (scoreCardContainer) {
+                    renderScoreCard(passed, total);
+                }
+            }
+
+            const needsTranslation = aiTranslationManager && 
+                aiTranslationManager.isTranslationReady() && 
+                aiTranslationManager.isTranslationNeeded(newLocale);
+
+            if (needsTranslation && Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
+                setAIButtonLoadingState(true);
+                
+                const topicsLoading = document.getElementById('dqm-topics-loading');
+                if (topicsLoading) {
+                    topicsLoading.textContent = __('Translating...', 'dqm-wordpress-plugin');
+                    topicsLoading.style.display = 'inline';
+                }
+
+                aiTranslationManager.restartTranslation();
+
+                aiTranslationManager.translateCheckpoints(
+                    allCheckpoints, 
+                    newLocale,
+                    (progress, state, error) => {
+                        if (progress && topicsLoading) {
+                            const percent = Math.round((progress.translatedCheckpoints / progress.totalCheckpoints) * 100);
+                            topicsLoading.textContent = `${__('Translating...', 'dqm-wordpress-plugin')} ${percent}%`;
+                            updateTranslationProgressInDialog(progress, state);
+                        }
+                    },
+                    true
+                ).then(translatedCheckpoints => {
+                    allCheckpoints = translatedCheckpoints;
+
+                    const topicsDropdown = document.getElementById('dqm-topics-dropdown');
+                    if (topicsDropdown) {
+                        const selectedValue = topicsDropdown.value;
+                        allTopics.clear();
+                        translatedCheckpoints.forEach(cp => {
+                            if (Array.isArray(cp.topics)) {
+                                cp.topics.forEach(t => allTopics.add(t));
+                            }
+                        });
+
+                        while (topicsDropdown.options.length > 1) {
+                            topicsDropdown.remove(1);
+                        }
+                        Array.from(allTopics).sort().forEach(topic => {
+                            const opt = document.createElement('option');
+                            opt.value = topic;
+                            opt.textContent = topic;
+                            topicsDropdown.appendChild(opt);
+                        });
+                        topicsDropdown.value = selectedValue;
+
+                        renderCheckpointsList(selectedValue || 'all');
+                    }
+
+                    if (topicsLoading) {
+                        topicsLoading.style.display = 'none';
+                    }
+
+
+                    aiTranslationManager.translateCheckpoints(
+                        translatedCheckpoints, 
+                        newLocale,
+                        (progress, state, error) => {
+                            updateTranslationProgressInDialog(progress, state);
+                            if (state === 'ready' || state === 'error') {
+                                setAIButtonLoadingState(false);
+                            }
+                        },
+                        false
+                    ).then(fullyTranslatedCheckpoints => {
+                        allCheckpoints = fullyTranslatedCheckpoints;
+                        const topicsDropdown = document.getElementById('dqm-topics-dropdown');
+                        if (topicsDropdown) {
+                            renderCheckpointsList(topicsDropdown.value || 'all');
+                        }
+                        setAIButtonLoadingState(false);
+
+                    }).catch(error => {
+
+                        if (error.name === 'AbortError' || error.message.includes('aborted')) {
+                            console.log('⏸️ Translation aborted (user switched language)');
+                        } else {
+                            console.error('❌ Full translation error:', error);
+                        }
+                        setAIButtonLoadingState(false);
+                    });
+
+                }).catch(error => {
+
+                    if (error.name === 'AbortError' || error.message.includes('aborted')) {
+                        console.log('⏸️ Title translation aborted (user switched language)');
+                    } else {
+                        console.error('❌ Title translation error:', error);
+                    }
+                    if (topicsLoading) {
+                        topicsLoading.style.display = 'none';
+                    }
+                    setAIButtonLoadingState(false);
+                });
+            } else {
+                if (aiTranslationManager) {
+                    aiTranslationManager.restartTranslation();
+                }
+
+                setAIButtonLoadingState(false);
+
+                if (originalCheckpoints && originalCheckpoints.length > 0) {
+                    allCheckpoints = JSON.parse(JSON.stringify(originalCheckpoints));
+
+                    const topicsDropdown = document.getElementById('dqm-topics-dropdown');
+                    if (topicsDropdown) {
+                        const selectedValue = topicsDropdown.value;
+                        allTopics.clear();
+                        allCheckpoints.forEach(cp => {
+                            if (Array.isArray(cp.topics)) {
+                                cp.topics.forEach(t => allTopics.add(t));
+                            }
+                        });
+
+                        while (topicsDropdown.options.length > 1) {
+                            topicsDropdown.remove(1);
+                        }
+                        Array.from(allTopics).sort().forEach(topic => {
+                            const opt = document.createElement('option');
+                            opt.value = topic;
+                            opt.textContent = topic;
+                            topicsDropdown.appendChild(opt);
+                        });
+                        topicsDropdown.value = selectedValue;
+                    }
+                }
+
+                const dropdown = document.getElementById('dqm-topics-dropdown');
+                if (dropdown && typeof renderCheckpointsList === 'function') {
+                    renderCheckpointsList(dropdown.value);
+                }
             }
         }
-        
-        // Re-render checkpoints list if it exists
-        const dropdown = document.getElementById('dqm-topics-dropdown');
-        if (dropdown && typeof renderCheckpointsList === 'function') {
-            renderCheckpointsList(dropdown.value);
-        }
-        
-        // Re-generate AI summary if needed
-        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled) {
+
+        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled && Object.keys(checkpointStatusMap).length > 0) {
             generateAISummary(lastAssetId, allCheckpoints, currentLocale);
         }
-        
+
         const existingSwitcher = document.querySelector('.dqm-language-switcher');
         if (existingSwitcher) {
             const newSwitcher = createLanguageSwitcher();
@@ -1791,28 +2212,27 @@
         persistLocale(null);
         currentLocale = resolveLocale();
         updateUITranslations();
-        
-        // Re-render score card if analysis data exists
-        if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
-            const total = allCheckpoints.length;
-            const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
-            const scoreCardContainer = document.getElementById('dqm-score-card-container');
-            if (scoreCardContainer) {
-                renderScoreCard(passed, total);
+
+        if (Object.keys(checkpointStatusMap).length > 0) {
+            if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
+                const total = allCheckpoints.length;
+                const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
+                const scoreCardContainer = document.getElementById('dqm-score-card-container');
+                if (scoreCardContainer) {
+                    renderScoreCard(passed, total);
+                }
+            }
+
+            const dropdown = document.getElementById('dqm-topics-dropdown');
+            if (dropdown && typeof renderCheckpointsList === 'function') {
+                renderCheckpointsList(dropdown.value);
             }
         }
-        
-        // Re-render checkpoints list if it exists
-        const dropdown = document.getElementById('dqm-topics-dropdown');
-        if (dropdown && typeof renderCheckpointsList === 'function') {
-            renderCheckpointsList(dropdown.value);
-        }
-        
-        // Re-generate AI summary if needed
-        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled) {
+
+        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled && Object.keys(checkpointStatusMap).length > 0) {
             generateAISummary(lastAssetId, allCheckpoints, currentLocale);
         }
-        
+
         const existingSwitcher = document.querySelector('.dqm-language-switcher');
         if (existingSwitcher) {
             const newSwitcher = createLanguageSwitcher();
@@ -1823,7 +2243,6 @@
     function updateUITranslations() {
         const currentTranslations = (window.DQM_I18N && window.DQM_I18N[currentLocale]) || window.DQM_I18N.en;
 
-        // Update header title
         const headerTitle = document.querySelector('.dqm-header-title');
         if (headerTitle) {
             headerTitle.textContent = t('title');
@@ -1833,7 +2252,7 @@
         scanButtons.forEach(function(btn) {
             if (btn) btn.textContent = t('run_quality_check');
         });
-        
+
         const topicsLabel = document.querySelector('.dqm-topics-label');
         if (topicsLabel) {
             topicsLabel.textContent = t('Filter by Topic:');
@@ -1873,14 +2292,41 @@
             }
         });
 
+        const badgeSpans = document.querySelectorAll('.dqm-breakdown-item .badge');
+        badgeSpans.forEach(function(badge) {
+            const currentText = badge.textContent.trim();
+            const categoryMap = {
+                'Accessibility': 'Accessibility',
+                'Barrierefreiheit': 'Accessibility',
+                'Accesibilidad': 'Accessibility',
+                'SEO': 'SEO',
+                'Brand': 'Brand',
+                'Marke': 'Brand',
+                'Marca': 'Brand',
+                'Regulatory': 'Regulatory',
+                'Vorschriften': 'Regulatory',
+                'Regulatorio': 'Regulatory',
+                'Legal': 'Legal',
+                'Rechtliches': 'Legal',
+                'Rechtlich': 'Legal',
+                'Usability': 'Usability',
+                'Benutzerfreundlichkeit': 'Usability',
+                'Usabilidad': 'Usability'
+            };
+            const englishKey = categoryMap[currentText];
+            if (englishKey) {
+                badge.textContent = t(englishKey);
+            }
+        });
+
         document.querySelectorAll('.checkpoint-no-highlight').forEach(function(el) {
             el.textContent = t('Cannot highlight');
         });
-        
+
         document.querySelectorAll('.checkpoint-highlight-info').forEach(function(el) {
             el.textContent = t('Click to highlight');
         });
-        
+
         const failedHeaders = document.querySelectorAll('.card h3');
         failedHeaders.forEach(function(heading) {
             const icon = heading.querySelector('i.fa-triangle-exclamation');
@@ -1888,7 +2334,7 @@
                 heading.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color:#ff5630;margin-right:8px;"></i>' + t('failed_checkpoints_title');
             }
         });
-        
+
         const dropdown = document.getElementById('dqm-topics-dropdown');
         if (dropdown && typeof renderCheckpointsList === 'function') {
             renderCheckpointsList(dropdown.value);
@@ -1905,6 +2351,18 @@
             document.body.appendChild(checkpointDialog);
         }
         checkpointDialog.innerHTML = '';
+
+        const isTranslating = aiTranslationManager && 
+                             !aiTranslationManager.isCheckpointFullyTranslated(cp.id) &&
+                             aiTranslationManager.translationState === 'translating';
+
+        if (isTranslating) {
+            const loadingBanner = document.createElement('div');
+            loadingBanner.className = 'dqm-dialog-loading-banner';
+            loadingBanner.innerHTML = '<span class="dqm-dialog-loading-spinner"></span>' + __('Translating...', 'dqm-wordpress-plugin');
+            checkpointDialog.appendChild(loadingBanner);
+        }
+
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '×';
         closeBtn.className = 'dqm-dialog-close';
@@ -1923,7 +2381,12 @@
         if (cp.description) {
             const desc = document.createElement('div');
             desc.className = 'dqm-dialog-desc';
-            desc.innerHTML = cp.description;
+
+            if (isTranslating) {
+                desc.innerHTML = '<span class="dqm-dialog-placeholder">' + __('Description translating...', 'dqm-wordpress-plugin') + '</span>';
+            } else {
+                desc.innerHTML = cp.description;
+            }
             checkpointDialog.appendChild(desc);
         }
         if (Array.isArray(cp.topics) && cp.topics.length > 0) {
