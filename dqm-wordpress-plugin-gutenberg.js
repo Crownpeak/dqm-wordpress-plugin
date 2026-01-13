@@ -11,6 +11,7 @@
     let aiSummaryCache = {};
     let renderScoreCard = null;
     let renderCheckpointsList = null;
+    let currentTranslationState = { status: 'idle', progress: null };
 
     let aiContext = null;
     let aiTranslationManager = null;
@@ -355,7 +356,6 @@
             translation = translations[targetLocale][key];
         }
 
-        // Fallback to English if translation is missing in target locale
         if (translation === key && targetLocale !== 'en') {
             if (window.DQM_I18N && window.DQM_I18N.en && window.DQM_I18N.en[key]) {
                 translation = window.DQM_I18N.en[key];
@@ -1279,6 +1279,25 @@
         const translationModeToggle = document.getElementById('dqm-translation-mode-toggle');
         const summaryToggle = document.getElementById('dqm-summary-toggle');
 
+        if (currentTranslationState.status === 'translating' && currentTranslationState.progress) {
+            const progressContainer = document.getElementById('dqm-translation-progress-container');
+            const progressFill = document.getElementById('dqm-translation-progress-fill');
+            const progressText = document.getElementById('dqm-translation-progress-text');
+            const statusText = document.getElementById('dqm-translation-status-text');
+            
+            if (progressContainer) {
+                progressContainer.style.display = 'block';
+                const p = currentTranslationState.progress;
+                const percent = p.totalCheckpoints > 0 
+                    ? Math.round((p.translatedCheckpoints / p.totalCheckpoints) * 100) 
+                    : 0;
+                
+                if (progressFill) progressFill.style.width = `${percent}%`;
+                if (progressText) progressText.textContent = `${p.translatedCheckpoints} / ${p.totalCheckpoints} ${t('checkpoints translated')}`;
+                if (statusText) statusText.textContent = t('Translating...');
+            }
+        }
+
         if (translationToggle) {
             translationToggle.addEventListener('change', (e) => {
                 translationEnabled = e.target.checked;
@@ -1353,6 +1372,66 @@
                     clearCacheBtn.disabled = false;
                     dialog.remove();
                 }, 2000);
+            });
+        }
+
+        if (translateBtn) {
+            translateBtn.addEventListener('click', async () => {
+                if (!aiTranslationManager) return;
+                
+                translateBtn.disabled = true;
+                const originalText = translateBtn.innerHTML;
+                translateBtn.innerHTML = '<span class="components-spinner"></span> ' + t('Translating...');
+                
+                const progressContainer = document.getElementById('dqm-translation-progress-container');
+                const progressFill = document.getElementById('dqm-translation-progress-fill');
+                const progressText = document.getElementById('dqm-translation-progress-text');
+                const statusText = document.getElementById('dqm-translation-status-text');
+
+                if (progressContainer) progressContainer.style.display = 'block';
+                
+                if (!translationEnabled) {
+                    translationEnabled = true;
+                    setAIToggleState('translationEnabled', 'true');
+                    if (translationToggle) translationToggle.checked = true;
+                    if (translationModeToggle) translationModeToggle.disabled = false;
+                }
+
+                try {
+                    const translatedCheckpoints = await aiTranslationManager.translateCheckpoints(
+                        allCheckpoints,
+                        currentLocale,
+                        (progress) => {
+                            if (progressFill && progressText) {
+                                const percent = Math.round((progress.translatedCheckpoints / progress.totalCheckpoints) * 100);
+                                progressFill.style.width = `${percent}%`;
+                                progressText.textContent = `${progress.translatedCheckpoints} / ${progress.totalCheckpoints} ${t('checkpoints translated')}`;
+                            }
+                        },
+                        true
+                    );
+                    
+                    allCheckpoints = translatedCheckpoints;
+                    
+                    if (lastAssetId && typeof renderScoreCard === 'function') {
+                        renderScoreCard(lastAssetId, allCheckpoints);
+                    }
+
+                    translateBtn.innerHTML = '<i class="fa-solid fa-check"></i> ' + t('Translation complete');
+                    if (statusText) statusText.innerText = t('Translation complete');
+                    
+                } catch (error) {
+                    console.error('Manual translation failed:', error);
+                    translateBtn.innerHTML = t('Translation failed');
+                } finally {
+                    setTimeout(() => {
+                        if (translateBtn) {
+                            translateBtn.disabled = false;
+                            translateBtn.innerHTML = t('Translate missing items');
+                        }
+                        if (progressContainer) progressContainer.style.display = 'none';
+                    }, 2000);
+                }
             });
         }
 
@@ -2355,6 +2434,8 @@
     }
 
     function updateTranslationProgressInDialog(progress, state) {
+        currentTranslationState = { status: state || 'idle', progress: progress };
+
         const container = document.getElementById('dqm-translation-progress-container');
         const statusText = document.getElementById('dqm-translation-status-text');
         const progressFill = document.getElementById('dqm-translation-progress-fill');
