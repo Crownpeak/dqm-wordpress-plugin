@@ -246,7 +246,9 @@
             source_url: 'URL parameter',
             source_user: 'Custom selected',
             source_navigator: 'Browser setting',
-            source_default: 'Default language'
+            source_default: 'Default language',
+            title: 'Digital Quality and Accessibility',
+            run_quality_check: 'Run Quality Check'
         },
         de: {
             language: 'Sprache',
@@ -257,7 +259,9 @@
             source_url: 'URL-Parameter',
             source_user: 'Durch Benutzer ausgewählt',
             source_navigator: 'Browser-Einstellung',
-            source_default: 'Standard-Sprache'
+            source_default: 'Standard-Sprache',
+            title: 'Digitale Qualität und Barrierefreiheit',
+            run_quality_check: 'Qualitätsprüfung starten'
         },
         es: {
             language: 'Idioma',
@@ -268,7 +272,9 @@
             source_url: 'Parámetro URL',
             source_user: 'Seleccionado manualmente',
             source_navigator: 'Configuración del navegador',
-            source_default: 'Idioma predeterminado'
+            source_default: 'Idioma predeterminado',
+            title: 'Calidad digital y accesibilidad',
+            run_quality_check: 'Ejecutar comprobación de calidad'
         }
     };
 
@@ -347,6 +353,15 @@
         }
         else if (translations[targetLocale] && translations[targetLocale][key]) {
             translation = translations[targetLocale][key];
+        }
+
+        // Fallback to English if translation is missing in target locale
+        if (translation === key && targetLocale !== 'en') {
+            if (window.DQM_I18N && window.DQM_I18N.en && window.DQM_I18N.en[key]) {
+                translation = window.DQM_I18N.en[key];
+            } else if (translations.en && translations.en[key]) {
+                translation = translations.en[key];
+            }
         }
 
         if (params && typeof params === 'object' && Object.keys(params).length > 0) {
@@ -930,11 +945,15 @@
         if (settingsBtn) {
             settingsBtn.addEventListener('click', showAISettingsDialog);
         }
+        const enrichedCheckpoints = checkpoints.map(cp => ({
+            ...cp,
+            failed: !!checkpointStatusMap[cp.id]
+        }));
 
         const params = new URLSearchParams({
             action: 'crownpeak_dqm_ai_summary',
             assetId: assetId,
-            checkpoints: JSON.stringify(checkpoints),
+            checkpoints: JSON.stringify(enrichedCheckpoints),
             targetLang: targetLang
         });
 
@@ -970,6 +989,8 @@
     function renderAISummary(data, isNew) {
         const container = document.getElementById('dqm-ai-summary-container');
         if (!container) return;
+
+        if (!data) return;
 
         const bullets = data.bullets || [];
         const stats = data.stats || {};
@@ -1579,7 +1600,7 @@
                             }).forEach(topic => {
                                 const badge = document.createElement('span');
                                 badge.className = 'badge ' + (topic || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                                badge.textContent = topic;
+                                badge.textContent = t(topic);
                                 badgesDiv.appendChild(badge);
                             });
                             contentDiv.appendChild(badgesDiv);
@@ -1588,12 +1609,12 @@
                         if (cp.canHighlight && !canHighlightAny) {
                             const cannotHighlight = document.createElement('div');
                             cannotHighlight.className = 'checkpoint-no-highlight';
-                            cannotHighlight.textContent = __('Cannot highlight', 'dqm-wordpress-plugin');
+                            cannotHighlight.textContent = t('Cannot highlight');
                             contentDiv.appendChild(cannotHighlight);
                         } else if (canHighlightAny) {
                             const canHighlight = document.createElement('div');
                             canHighlight.className = 'checkpoint-highlight-info';
-                            canHighlight.textContent = __('Click to highlight', 'dqm-wordpress-plugin');
+                            canHighlight.textContent = t('Click to highlight');
                             contentDiv.appendChild(canHighlight);
                         }
 
@@ -2076,7 +2097,7 @@
                         spinner.style.display = 'none';
                         fetchAndRenderSpellcheck(data.assetId);
 
-                        if (CrownpeakDQM.aiSummaryEnabled === '1') {
+                        if (getAIToggleState('summaryEnabled', 'false') === 'true') {
                             generateAISummary(data.assetId, allCheckpoints, currentLocale);
                         }
 
@@ -2407,35 +2428,55 @@
             }
         }
 
-        updateUITranslations();
+        if (window.DQM_I18N && window.DQM_I18N.loadLanguageFile) {
+             window.DQM_I18N.loadLanguageFile(newLocale).then(() => {
+                updateUITranslations();
+                refreshResults();
+             }).catch(e => {
+                console.warn('Language load failed', e);
+                updateUITranslations();
+                refreshResults();
+             });
+        } else {
+            updateUITranslations();
+            refreshResults();
+        }
 
-        if (Object.keys(checkpointStatusMap).length > 0) {
-            if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
-                const total = allCheckpoints.length;
-                const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
-                const scoreCardContainer = document.getElementById('dqm-score-card-container');
-                if (scoreCardContainer) {
-                    renderScoreCard(passed, total);
+        function refreshResults() {
+             if (Object.keys(checkpointStatusMap).length > 0) {
+                if (Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
+                    const total = allCheckpoints.length;
+                    const passed = allCheckpoints.filter(cp => !checkpointStatusMap[cp.id]).length;
+                    const scoreCardContainer = document.getElementById('dqm-score-card-container');
+                    if (scoreCardContainer) {
+                        renderScoreCard(passed, total);
+                    }
+                }
+
+                const dropdown = document.getElementById('dqm-topics-dropdown');
+                if (dropdown && typeof renderCheckpointsList === 'function') {
+                    renderCheckpointsList(dropdown.value);
                 }
             }
+        }
 
-            const needsTranslation = aiTranslationManager && 
-                aiTranslationManager.isTranslationReady() && 
-                aiTranslationManager.isTranslationNeeded(newLocale);
+        const needsTranslation = aiTranslationManager && 
+            aiTranslationManager.isTranslationReady() && 
+            aiTranslationManager.isTranslationNeeded(newLocale);
 
-            if (needsTranslation && Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
-                setAIButtonLoadingState(true);
-                
-                const topicsLoading = document.getElementById('dqm-topics-loading');
-                if (topicsLoading) {
-                    topicsLoading.textContent = __('Translating...', 'dqm-wordpress-plugin');
-                    topicsLoading.style.display = 'inline';
-                }
+        if (needsTranslation && Array.isArray(allCheckpoints) && allCheckpoints.length > 0) {
+            setAIButtonLoadingState(true);
+            
+            const topicsLoading = document.getElementById('dqm-topics-loading');
+            if (topicsLoading) {
+                topicsLoading.textContent = t('Translating...');
+                topicsLoading.style.display = 'inline';
+            }
 
-                aiTranslationManager.restartTranslation();
+            aiTranslationManager.restartTranslation();
 
-                aiTranslationManager.translateCheckpoints(
-                    allCheckpoints, 
+            aiTranslationManager.translateCheckpoints(
+                allCheckpoints, 
                     newLocale,
                     (progress, state, error) => {
                         if (progress && topicsLoading) {
@@ -2555,9 +2596,8 @@
                     renderCheckpointsList(dropdown.value);
                 }
             }
-        }
 
-        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled && Object.keys(checkpointStatusMap).length > 0) {
+        if (lastAssetId && getAIToggleState('summaryEnabled', 'false') === 'true' && Object.keys(checkpointStatusMap).length > 0) {
             generateAISummary(lastAssetId, allCheckpoints, currentLocale);
         }
 
@@ -2589,7 +2629,7 @@
             }
         }
 
-        if (lastAssetId && CrownpeakDQM.aiSummaryEnabled && Object.keys(checkpointStatusMap).length > 0) {
+        if (lastAssetId && getAIToggleState('summaryEnabled', 'false') === 'true' && Object.keys(checkpointStatusMap).length > 0) {
             generateAISummary(lastAssetId, allCheckpoints, currentLocale);
         }
 
