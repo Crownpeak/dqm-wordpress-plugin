@@ -137,7 +137,13 @@ class AITranslationManager {
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        const cacheKey = `${targetLang}_${this.getTranslationMode()}_${titlesOnly ? 'titles_' : ''}${this.generateCheckpointHash(checkpoints)}`;
+        const failedCheckpoints = checkpoints.filter(cp => cp.failed === true);
+        
+        if (failedCheckpoints.length === 0) {
+            return checkpoints;
+        }
+
+        const cacheKey = `${targetLang}_${this.getTranslationMode()}_${titlesOnly ? 'titles_' : ''}${this.generateCheckpointHash(failedCheckpoints)}`;
 
         if (this.translationCache[cacheKey]) {
             return this.translationCache[cacheKey];
@@ -147,7 +153,7 @@ class AITranslationManager {
         this.aiContext.setTranslationState('initializing');
         this.translationProgress = {
             translatedCheckpoints: 0,
-            totalCheckpoints: checkpoints.length
+            totalCheckpoints: failedCheckpoints.length
         };
         this.translationError = null;
         this.abortController = new AbortController();
@@ -164,14 +170,14 @@ class AITranslationManager {
         try {
             this.translationState = 'translating';
 
-            while (batchStart < checkpoints.length) {
+            while (batchStart < failedCheckpoints.length) {
                 if (this.abortController.signal.aborted) {
                     throw new Error('Translation aborted');
                 }
 
                 const formData = new FormData();
                 formData.append('action', 'crownpeak_dqm_translate');
-                formData.append('checkpoints', JSON.stringify(checkpoints));
+                formData.append('checkpoints', JSON.stringify(failedCheckpoints));
                 formData.append('targetLang', targetLang);
                 formData.append('batchStart', batchStart);
                 formData.append('batchSize', batchSize);
@@ -297,10 +303,22 @@ class AITranslationManager {
 
     mergeTranslations(originalCheckpoints, translatedCheckpoints) {
         const translationMap = new Map();
+        const topicTranslationMap = new Map();
 
         translatedCheckpoints.forEach(tc => {
             if (tc.id) {
                 translationMap.set(tc.id, tc);
+            }
+        });
+
+        originalCheckpoints.forEach(origCp => {
+            const translated = translationMap.get(origCp.id);
+            if (translated && Array.isArray(origCp.topics) && Array.isArray(translated.topics)) {
+                origCp.topics.forEach((origTopic, idx) => {
+                    if (translated.topics[idx]) {
+                        topicTranslationMap.set(origTopic, translated.topics[idx]);
+                    }
+                });
             }
         });
 
@@ -315,8 +333,17 @@ class AITranslationManager {
                     topics: translated.topics || cp.topics || [],
                     translated: true
                 };
+            } else {
+                const translatedTopics = Array.isArray(cp.topics) 
+                    ? cp.topics.map(topic => topicTranslationMap.get(topic) || topic)
+                    : cp.topics || [];
+                    
+                return { 
+                    ...cp, 
+                    topics: translatedTopics,
+                    translated: false 
+                };
             }
-            return { ...cp, translated: false };
         });
     }
 
