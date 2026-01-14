@@ -628,7 +628,7 @@ function crownpeak_dqm_ai_summary_handler()
             ],
             'response_format' => ['type' => 'json_object'],
             'temperature' => 0.3,
-            'max_tokens' => $target_lang === 'en' ? 384 : 512,
+            'max_completion_tokens' => $target_lang === 'en' ? 384 : 512,
         ]),
         'timeout' => 60,
     ];
@@ -817,7 +817,7 @@ function crownpeak_dqm_translate_handler()
         'model' => $openai_model,
         'messages' => $messages,
         'temperature' => $titles_only ? 0.1 : ($translation_mode === 'full' ? 0.2 : 0.1),
-        'max_tokens' => $titles_only ? 1024 : ($translation_mode === 'full' ? 4096 : 2048),
+        'max_completion_tokens' => $titles_only ? 1024 : ($translation_mode === 'full' ? 4096 : 2048),
     ];
     
     if (strpos($openai_model, 'gpt-5') === 0) {
