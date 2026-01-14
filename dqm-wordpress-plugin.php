@@ -614,22 +614,31 @@ function crownpeak_dqm_ai_summary_handler()
     );
     
     $endpoint = 'https://api.openai.com/v1/chat/completions';
+    
+    // Build body data conditionally based on model type
+    $body_data = [
+        'model' => $openai_model,
+        'messages' => [
+            ['role' => 'system', 'content' => $system_prompt],
+            ['role' => 'user', 'content' => $user_prompt]
+        ],
+        'response_format' => ['type' => 'json_object'],
+        'max_completion_tokens' => $target_lang === 'en' ? 384 : 512,
+    ];
+    
+    // Reasoning models (o1, o3, gpt-5) don't support custom temperature
+    $is_reasoning_model = strpos($openai_model, 'o1-') === 0 || strpos($openai_model, 'o3-') === 0 || strpos($openai_model, 'gpt-5') === 0;
+    if (!$is_reasoning_model) {
+        $body_data['temperature'] = 0.3;
+    }
+    
     $args = [
         'method' => 'POST',
         'headers' => [
             'Content-Type' => 'application/json',
             'Authorization' => 'Bearer ' . $openai_api_key,
         ],
-        'body' => json_encode([
-            'model' => $openai_model,
-            'messages' => [
-                ['role' => 'system', 'content' => $system_prompt],
-                ['role' => 'user', 'content' => $user_prompt]
-            ],
-            'response_format' => ['type' => 'json_object'],
-            'temperature' => 0.3,
-            'max_completion_tokens' => $target_lang === 'en' ? 384 : 512,
-        ]),
+        'body' => json_encode($body_data),
         'timeout' => 60,
     ];
     
@@ -816,9 +825,13 @@ function crownpeak_dqm_translate_handler()
     $body_data = [
         'model' => $openai_model,
         'messages' => $messages,
-        'temperature' => $titles_only ? 0.1 : ($translation_mode === 'full' ? 0.2 : 0.1),
         'max_completion_tokens' => $titles_only ? 1024 : ($translation_mode === 'full' ? 4096 : 2048),
     ];
+    
+    $is_reasoning_model = strpos($openai_model, 'o1-') === 0 || strpos($openai_model, 'o3-') === 0 || strpos($openai_model, 'gpt-5') === 0;
+    if (!$is_reasoning_model) {
+        $body_data['temperature'] = $titles_only ? 0.1 : ($translation_mode === 'full' ? 0.2 : 0.1);
+    }
     
     if (strpos($openai_model, 'gpt-5') === 0) {
         $body_data['reasoning_effort'] = $reasoning_effort;
