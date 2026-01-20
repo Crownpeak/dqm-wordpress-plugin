@@ -615,7 +615,6 @@ function crownpeak_dqm_ai_summary_handler()
     
     $endpoint = 'https://api.openai.com/v1/chat/completions';
     
-    // Build body data conditionally based on model type
     $body_data = [
         'model' => $openai_model,
         'messages' => [
@@ -626,7 +625,6 @@ function crownpeak_dqm_ai_summary_handler()
         'max_completion_tokens' => $target_lang === 'en' ? 384 : 512,
     ];
     
-    // Reasoning models (o1, o3, gpt-5) don't support custom temperature
     $is_reasoning_model = strpos($openai_model, 'o1-') === 0 || strpos($openai_model, 'o3-') === 0 || strpos($openai_model, 'gpt-5') === 0;
     if (!$is_reasoning_model) {
         $body_data['temperature'] = 0.3;
